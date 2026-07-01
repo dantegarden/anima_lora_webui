@@ -7,6 +7,7 @@ export async function createAnimaApp(ctx) {
     await import('./imports.js?v=module-bootstrap-20260627-3');
     await import('./chunks/01-scope-state.js?v=module-bootstrap-20260627-3');
     await import('./chunks/02-ensure-history-detail-feature.js?v=module-bootstrap-20260627-3');
+    await import('./chunks/02a-file-manager-feature.js?v=module-bootstrap-20260627-3');
     await import('./chunks/03-parse-network-arg-entry.js?v=module-bootstrap-20260627-3');
     await import('./chunks/04-create-config-group-entry.js?v=module-bootstrap-20260627-3');
     await import('./chunks/05-create-stage-resolution-summary.js?v=module-bootstrap-20260627-3');

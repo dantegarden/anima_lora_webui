@@ -53,6 +53,7 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/supervisord.conf /etc/supervisor/conf.d/anima_lora.conf
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
+ && chmod +x /workspace/anima_lora_webui/scripts/download_models_from_oss.sh \
  && git lfs install --system \
  && mkdir -p /var/log/supervisor /var/run/sshd /workspace/anima_lora_webui/logs \
  && mkdir -p /workspace/anima_lora_webui/models /workspace/anima_lora_webui/output \

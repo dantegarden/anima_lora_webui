@@ -81,6 +81,7 @@ const ctx = globalThis.ctx;
         ensureQueueFeature().bindQueueEvents();
         ensureWeightAnalysisFeature().bindWeightAnalysisEvents();
         ensureEnvironmentCheckFeature().bindEnvironmentCheckEvents();
+        ensureFileManagerFeature().bindFileManagerEvents();
         document.getElementById('btn-apply-toml').addEventListener('click', applyTomlToConfig);
         document.getElementById('btn-move-toml-group').addEventListener('click', moveCurrentTomlToGroup);
         document.getElementById('btn-create-blank-preset').addEventListener('click', createBlankPresetFromLoraTemplate);

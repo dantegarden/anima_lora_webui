@@ -1,0 +1,153 @@
+/* File manager workspace. */
+#tab-file-manager {
+    padding: 1rem 1.25rem 1.5rem;
+}
+
+.file-manager-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.file-manager-panel {
+    display: grid;
+    gap: 0.9rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    background: var(--panel-bg);
+    box-shadow: var(--shadow-soft);
+}
+
+.file-manager-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: start;
+}
+
+.file-manager-header strong {
+    display: block;
+    font-size: 1.05rem;
+    margin-bottom: 0.2rem;
+}
+
+.file-manager-eyebrow {
+    display: inline-block;
+    margin-bottom: 0.35rem;
+    color: var(--accent-color);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.file-manager-toolbar,
+.file-manager-upload-panel,
+.file-manager-subtoolbar {
+    display: flex;
+    gap: 0.75rem;
+    align-items: end;
+    flex-wrap: wrap;
+}
+
+.file-manager-toolbar label,
+.file-manager-search-field {
+    display: grid;
+    gap: 0.28rem;
+}
+
+.file-manager-path-field {
+    flex: 1 1 420px;
+}
+
+.file-manager-upload-panel {
+    padding: 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--surface-muted);
+}
+
+.file-manager-upload-progress {
+    width: min(260px, 100%);
+    height: 0.85rem;
+}
+
+.file-manager-upload-progress-text {
+    min-width: 140px;
+    color: var(--text-muted);
+    font-size: 0.84rem;
+}
+
+.file-manager-extract-hint {
+    display: inline-flex;
+    gap: 0.45rem;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 0.84rem;
+}
+
+.file-manager-search-field {
+    flex: 1 1 280px;
+}
+
+.file-manager-breadcrumb,
+.file-manager-status {
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--surface-muted);
+    color: var(--text-muted);
+}
+
+.file-manager-status.ok {
+    color: var(--success-color);
+}
+
+.file-manager-status.error {
+    color: var(--danger-color);
+}
+
+.file-manager-list {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.file-manager-entry {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.9rem;
+    align-items: center;
+    padding: 0.85rem 0.95rem;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--surface-bg);
+}
+
+.file-manager-entry-main,
+.file-manager-entry-meta,
+.file-manager-entry-actions {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.file-manager-entry-main strong {
+    overflow-wrap: anywhere;
+}
+
+.file-manager-entry-main span,
+.file-manager-entry-meta span {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+}
+
+.file-manager-entry-actions {
+    display: flex;
+    gap: 0.45rem;
+}
+
+.file-manager-empty {
+    padding: 1rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 14px;
+    color: var(--text-muted);
+    text-align: center;
+}

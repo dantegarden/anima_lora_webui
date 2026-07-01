@@ -11,7 +11,7 @@ from aiohttp import web
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-MAX_UPLOAD_BYTES = 512 * 1024 * 1024
+MAX_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024
 
 
 async def index_handler(request: web.Request) -> web.FileResponse:

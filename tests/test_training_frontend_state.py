@@ -168,6 +168,10 @@ def test_frontend_module_graph_follows_production_entrypoint() -> None:
     assert "js/features/environment-check/state.js" in relative
     assert "js/features/environment-check/api.js" in relative
     assert "js/features/environment-check/render.js" in relative
+    assert "js/features/file-manager/index.js" in relative
+    assert "js/features/file-manager/state.js" in relative
+    assert "js/features/file-manager/api.js" in relative
+    assert "js/features/file-manager/render.js" in relative
     assert "js/features/app-shell/theme.js" in relative
     assert "js/features/app-shell/gpu-picker.js" in relative
     assert "js/features/app-shell/tabs.js" in relative
@@ -255,7 +259,7 @@ def test_anima_app_replaces_legacy_container_with_small_modules() -> None:
     assert oversized == ["js/features/anima-app/chunks/25-update-progress.js"]
     assert all(token not in app_source for token in ("fetch(", "addEventListener(", "getElementById("))
     assert feature_dirs
-    assert feature_dirs <= {str(Path(item).parent) for item in relative}
+    assert feature_dirs <= {Path(item).parent.as_posix() for item in relative}
 
 
 def test_preview_feature_modules_are_loaded_from_production_entrypoint() -> None:
@@ -475,6 +479,87 @@ def test_environment_check_feature_modules_are_loaded_from_production_entrypoint
         "environment",
     ):
         assert tooltip_id in tooltip_section
+
+
+def test_file_manager_feature_modules_are_loaded_from_production_entrypoint() -> None:
+    legacy_source = _anima_app_container_text()
+    file_manager_index = _frontend_module_text("js/features/file-manager/index.js")
+    file_manager_api = _frontend_module_text("js/features/file-manager/api.js")
+    file_manager_render = _frontend_module_text("js/features/file-manager/render.js")
+    file_manager_state = _frontend_module_text("js/features/file-manager/state.js")
+    tabs_source = _frontend_module_text("js/features/app-shell/tabs.js")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    listener_section = _section(legacy_source, "function setupEventListeners", "function installBeginnerTooltips")
+    tab_setup = _section(tabs_source, "function setupTabs()", "return {")
+    routes_source = (STATIC_DIR.parents[0] / "routes" / "__init__.py").read_text(encoding="utf-8")
+
+    assert "createFileManagerFeature(ctx)" in legacy_source
+    assert "ensureFileManagerFeature().bindFileManagerEvents();" in listener_section
+    assert "if (nextTab === 'file-manager')" in tab_setup
+    assert "ensureFileManagerFeature?.().loadFileManagerRoots();" in tab_setup
+    assert "bindFileManagerEvents" in file_manager_index
+    assert "loadFileManagerRoots" in file_manager_index
+    assert "loadCurrentDirectory" in file_manager_index
+    assert "planAndRunExtract" in file_manager_index
+    assert "pollExtractJob" in file_manager_index
+    assert "renameCurrentEntry" in file_manager_index
+    assert "window.confirm(" in file_manager_index
+    assert "window.prompt(" in file_manager_index
+    assert "fetchFileManagerRoots" in file_manager_api
+    assert "fetchFileManagerList" in file_manager_api
+    assert "uploadFileManagerFile" in file_manager_api
+    assert "planFileManagerExtract" in file_manager_api
+    assert "runFileManagerExtract" in file_manager_api
+    assert "fetchFileManagerJobStatus" in file_manager_api
+    assert "renameFileManagerEntry" in file_manager_api
+    assert "'/api/file-manager/roots'" in file_manager_api
+    assert "'/api/file-manager/list'" in file_manager_api
+    assert "'/api/file-manager/upload'" in file_manager_api
+    assert "'/api/file-manager/extract/plan'" in file_manager_api
+    assert "'/api/file-manager/extract/run'" in file_manager_api
+    assert "'/api/file-manager/jobs/'" in file_manager_api
+    assert "'/api/file-manager/rename'" in file_manager_api
+    assert "buildFileManagerDownloadUrl" in file_manager_api
+    assert "new XMLHttpRequest()" in file_manager_api
+    assert "xhr.upload?.addEventListener('progress'" in file_manager_api
+    assert "createFileManagerRenderer" in file_manager_render
+    assert "renderRoots" in file_manager_render
+    assert "renderDirectory" in file_manager_render
+    assert "createFileManagerState" in file_manager_state
+    assert "setup_file_manager_routes(app)" in routes_source
+
+    assert 'data-tab="file-manager"' in html
+    assert 'id="tab-file-manager"' in html
+    assert 'id="file-manager-root"' in html
+    assert 'id="file-manager-path"' in html
+    assert 'id="btn-file-manager-go"' in html
+    assert 'id="btn-file-manager-refresh"' in html
+    assert 'id="file-manager-search"' in html
+    assert 'id="file-manager-upload-input"' in html
+    assert 'id="file-manager-upload-target"' in html
+    assert 'id="btn-file-manager-upload"' in html
+    assert 'id="file-manager-upload-progress"' in html
+    assert 'id="file-manager-auto-extract"' in html
+    assert 'id="file-manager-breadcrumb"' in html
+    assert 'id="file-manager-status"' in html
+    assert 'id="file-manager-list"' in html
+    assert '浏览 `/home` 和训练输出目录' in html
+
+    for selector in (
+        "#tab-file-manager",
+        ".file-manager-layout",
+        ".file-manager-panel",
+        ".file-manager-toolbar",
+        ".file-manager-upload-panel",
+        ".file-manager-upload-progress",
+        ".file-manager-extract-hint",
+        ".file-manager-breadcrumb",
+        ".file-manager-list",
+        ".file-manager-entry",
+        ".file-manager-empty",
+    ):
+        assert selector in css
 
 
 def test_new_training_launch_enters_live_monitoring() -> None:

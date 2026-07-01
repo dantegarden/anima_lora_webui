@@ -96,6 +96,7 @@ const ctx = globalThis.ctx;
             loadGlobalSettings,
             ensureWeightAnalysisFeature,
             ensureEnvironmentCheckFeature,
+            ensureFileManagerFeature,
             resetTrainingExpandedStateOnLeave,
             resizeLiveChart: () => lossChart?.resize?.(),
             auditConfigTrainingSourceOnEnter,
