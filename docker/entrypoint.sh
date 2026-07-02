@@ -4,7 +4,7 @@ set -euo pipefail
 mkdir -p /var/run/sshd
 
 # Set the root password; callers can override it with SSH_PASSWORD.
-export SSH_PASSWORD="${SSH_PASSWORD:-MSgouUQP4vhET}"
+export SSH_PASSWORD="${SSH_PASSWORD:-bizyair}"
 echo "root:$SSH_PASSWORD" | chpasswd
 
 sed -ri 's/^#?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
