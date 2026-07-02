@@ -88,6 +88,7 @@ export const FORM_SECTION_DEFS = [
         keys: [
             'blocks_to_swap',
             'block_swap_transfer_dtype',
+            'block_swap_restore_mode',
             'selective_checkpoint',
             'selective_checkpoint_blocks',
             'block_swap_profile_jsonl',
@@ -99,11 +100,12 @@ export const FORM_SECTION_DEFS = [
             'preprocess_vae_cache_batch_size',
             'preprocess_text_cache_batch_size',
             'preprocess_memory_profile',
+            'preprocess_precision_preference',
             'gradient_checkpointing',
+            'precision_preference',
             'lr_warmup_steps',
             'unsloth_offload_checkpointing',
             'disable_block_swap_for_eval',
-            'mixed_precision',
             'attn_mode',
             'torch_compile',
             'compile_inductor_mode',
@@ -408,8 +410,8 @@ export const CONFIG_COMPACT_FIELD_GROUPS = {
     ],
     'config-group-resource': [
         {
-            className: 'config-field-grid-4col',
-            keys: ['blocks_to_swap', 'block_swap_transfer_dtype', 'selective_checkpoint', 'selective_checkpoint_blocks'],
+            className: 'config-field-grid-5col',
+            keys: ['blocks_to_swap', 'block_swap_transfer_dtype', 'block_swap_restore_mode', 'selective_checkpoint', 'selective_checkpoint_blocks'],
         },
         {
             className: 'config-field-grid-3col',
@@ -424,8 +426,12 @@ export const CONFIG_COMPACT_FIELD_GROUPS = {
             keys: ['preprocess_vae_cache_batch_size', 'preprocess_text_cache_batch_size', 'preprocess_memory_profile'],
         },
         {
-            className: 'config-field-grid-3col config-field-grid-inline-flags',
-            keys: ['gradient_checkpointing', 'unsloth_offload_checkpointing', 'disable_block_swap_for_eval'],
+            className: 'config-field-grid-2col config-field-grid-inline-flags',
+            keys: ['gradient_checkpointing', 'precision_preference'],
+        },
+        {
+            className: 'config-field-grid-2col config-field-grid-inline-flags',
+            keys: ['unsloth_offload_checkpointing', 'disable_block_swap_for_eval'],
         },
         {
             className: 'config-field-grid-3col',

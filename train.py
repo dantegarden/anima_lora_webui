@@ -29,7 +29,10 @@ from library.anima import (
 from library.models import qwen_vae as qwen_image_autoencoder_kl
 from library.models import sai_spec as sai_model_spec
 from library.runtime import noise as noise_utils
-from library.runtime.offloading import normalize_block_swap_transfer_dtype
+from library.runtime.offloading import (
+    normalize_block_swap_restore_mode,
+    normalize_block_swap_transfer_dtype,
+)
 from library.runtime.peak_probe import PeakProbe
 from library.config import loader as config_util
 from library.training.method_adapter import (
@@ -495,6 +498,9 @@ class AnimaTrainer:
         args.block_swap_transfer_dtype = normalize_block_swap_transfer_dtype(
             getattr(args, "block_swap_transfer_dtype", "bf16")
         )
+        args.block_swap_restore_mode = normalize_block_swap_restore_mode(
+            getattr(args, "block_swap_restore_mode", "foreach")
+        )
 
         if (
             args.blocks_to_swap is not None
@@ -903,6 +909,7 @@ class AnimaTrainer:
                 "enable block swap: "
                 f"blocks_to_swap={args.blocks_to_swap}, "
                 f"transfer_dtype={args.block_swap_transfer_dtype}, "
+                f"restore_mode={args.block_swap_restore_mode}, "
                 f"profile_jsonl={profile_jsonl or 'off'}"
             )
             model.enable_block_swap(
@@ -910,6 +917,7 @@ class AnimaTrainer:
                 accelerator.device,
                 profile_jsonl=profile_jsonl,
                 transfer_dtype=args.block_swap_transfer_dtype,
+                restore_mode=args.block_swap_restore_mode,
             )
             _maybe_probe_components(
                 self,
@@ -920,6 +928,7 @@ class AnimaTrainer:
                 blocks_to_swap=args.blocks_to_swap,
                 block_swap_profile_jsonl=profile_jsonl or "off",
                 block_swap_transfer_dtype=args.block_swap_transfer_dtype,
+                block_swap_restore_mode=args.block_swap_restore_mode,
             )
 
         # Variance-reduced FM loss: the "frozen reference" is the trainable
@@ -955,7 +964,7 @@ class AnimaTrainer:
     def get_text_encoding_strategy(self, args):
         return strategy_anima.AnimaTextEncodingStrategy()
 
-    def get_text_encoder_outputs_caching_strategy(self, args):
+    def get_text_encoder_outputs_caching_strategy(self, args, weight_dtype: torch.dtype):
         if args.cache_text_encoder_outputs:
             return strategy_anima.AnimaTextEncoderOutputsCachingStrategy(
                 args.cache_text_encoder_outputs_to_disk,
@@ -974,6 +983,7 @@ class AnimaTrainer:
                 diff_output_preservation_class=getattr(
                     args, "diff_output_preservation_class", None
                 ),
+                cache_dtype=weight_dtype,
             )
         return None
 
@@ -2124,8 +2134,9 @@ class AnimaTrainer:
         # Set the text-encoder-outputs caching strategy now (before the model
         # load) so the cache-completeness probe below can use it to decide
         # whether the Qwen3 text encoder needs loading at all.
+        weight_dtype, _save_dtype = prepare_dtype(args)
         text_encoder_outputs_caching_strategy = (
-            self.get_text_encoder_outputs_caching_strategy(args)
+            self.get_text_encoder_outputs_caching_strategy(args, weight_dtype)
         )
         if text_encoder_outputs_caching_strategy is not None:
             text_strategies.TextEncoderOutputsCachingStrategy.set_strategy(
