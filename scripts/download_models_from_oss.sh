@@ -33,7 +33,7 @@ download_file \
   "models/diffusion_models/anima-base-v1.0.safetensors"
 
 download_file \
-  "https://storage.bizyair/assets/train/qwen_3_06b_base.safetensors" \
+  "https://storage.bizyair.cn/assets/train/qwen_3_06b_base.safetensors" \
   "models/text_encoders/qwen_3_06b_base.safetensors"
 
 download_file \

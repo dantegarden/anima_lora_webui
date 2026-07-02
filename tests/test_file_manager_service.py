@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import asyncio
 import tarfile
+import io
+import zipfile
 
 import pytest
 
@@ -255,3 +257,81 @@ def test_file_manager_rename_entry_rejects_conflicts_and_invalid_name(tmp_path, 
 
     with pytest.raises(ValueError, match="名称不合法"):
         file_manager_service.rename_entry("home", str(source), "../escape.tar")
+
+
+def test_file_manager_plan_extract_archive_supports_zip(tmp_path, monkeypatch):
+    home_root = tmp_path / "home"
+    archive_path = home_root / "dataset.zip"
+    target_dir = home_root / "datasets"
+    home_root.mkdir(parents=True)
+    target_dir.mkdir(parents=True)
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zipped:
+        zipped.writestr("existing.txt", "new")
+        zipped.writestr("nested/fresh.txt", "fresh")
+    archive_path.write_bytes(buffer.getvalue())
+    (target_dir / "existing.txt").write_text("old", encoding="utf-8")
+
+    monkeypatch.setattr(file_manager_service, "resolve_home_root", lambda: home_root.resolve())
+    monkeypatch.setattr(
+        file_manager_service.settings_service,
+        "resolve_output_root",
+        lambda: (tmp_path / "output" / "runs").resolve(),
+    )
+
+    payload = file_manager_service.plan_extract_archive(
+        "home",
+        str(archive_path),
+        str(target_dir),
+        overwrite=False,
+    )
+
+    assert payload["ok"] is True
+    assert payload["archive"]["name"] == "dataset.zip"
+    assert payload["summary"]["files"] == 2
+    assert payload["summary"]["conflicts"] == 1
+
+
+def test_file_manager_extract_job_unpacks_zip_after_confirmation(tmp_path, monkeypatch):
+    home_root = tmp_path / "home"
+    archive_path = home_root / "dataset.zip"
+    target_dir = home_root / "datasets"
+    home_root.mkdir(parents=True)
+    target_dir.mkdir(parents=True)
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zipped:
+        zipped.writestr("a.txt", "alpha")
+        zipped.writestr("nested/b.txt", "beta")
+    archive_path.write_bytes(buffer.getvalue())
+
+    monkeypatch.setattr(file_manager_service, "resolve_home_root", lambda: home_root.resolve())
+    monkeypatch.setattr(
+        file_manager_service.settings_service,
+        "resolve_output_root",
+        lambda: (tmp_path / "output" / "runs").resolve(),
+    )
+
+    async def run_case():
+        app = {}
+        started = file_manager_service.start_extract_job(
+            app,
+            "home",
+            str(archive_path),
+            str(target_dir),
+            overwrite=False,
+        )
+        job_id = started["job"]["id"]
+        for _ in range(20):
+            status = file_manager_service.get_job_status(app, job_id)
+            if status["job"]["state"] in {"done", "error"}:
+                return status
+            await asyncio.sleep(0.01)
+        return file_manager_service.get_job_status(app, job_id)
+
+    status = asyncio.run(run_case())
+
+    assert status["job"]["state"] == "done"
+    assert (target_dir / "a.txt").read_text(encoding="utf-8") == "alpha"
+    assert (target_dir / "nested" / "b.txt").read_text(encoding="utf-8") == "beta"

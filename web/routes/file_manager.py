@@ -69,7 +69,6 @@ async def handle_file_manager_upload(request: web.Request) -> web.Response:
     reader = await request.multipart()
     root = ""
     target_path = ""
-    upload_field = None
 
     while True:
         field = await reader.next()
@@ -80,22 +79,23 @@ async def handle_file_manager_upload(request: web.Request) -> web.Response:
         elif field.name == "target_path":
             target_path = (await field.text()).strip()
         elif field.name == "file":
-            upload_field = field
+            if not root:
+                return web.json_response({"ok": False, "error": "缺少 root 参数"}, status=400)
+            if not target_path:
+                return web.json_response({"ok": False, "error": "缺少 target_path 参数"}, status=400)
+            try:
+                payload = await save_uploaded_file(root, target_path, field)
+            except FileNotFoundError as exc:
+                return web.json_response({"ok": False, "error": str(exc)}, status=404)
+            except ValueError as exc:
+                return web.json_response({"ok": False, "error": str(exc)}, status=403)
+            return web.json_response(payload)
 
     if not root:
         return web.json_response({"ok": False, "error": "缺少 root 参数"}, status=400)
     if not target_path:
         return web.json_response({"ok": False, "error": "缺少 target_path 参数"}, status=400)
-    if upload_field is None:
-        return web.json_response({"ok": False, "error": "缺少 file 参数"}, status=400)
-
-    try:
-        payload = await save_uploaded_file(root, target_path, upload_field)
-    except FileNotFoundError as exc:
-        return web.json_response({"ok": False, "error": str(exc)}, status=404)
-    except ValueError as exc:
-        return web.json_response({"ok": False, "error": str(exc)}, status=403)
-    return web.json_response(payload)
+    return web.json_response({"ok": False, "error": "缺少 file 参数"}, status=400)
 
 
 async def handle_file_manager_extract_plan(request: web.Request) -> web.Response:

@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import io
 from pathlib import Path
+import zipfile
 
 import pytest
+from aiohttp import FormData, web
+from aiohttp.test_utils import TestClient, TestServer
+
+from web.services import file_manager_service
 
 
 def _load_routes_module():
@@ -230,6 +236,54 @@ def test_file_manager_rename_route_returns_renamed_payload(monkeypatch):
 
     assert response.status == 200
     assert '"new_path": "/home/datasets/new-name.tar"' in response.text
+
+
+def test_file_manager_upload_route_keeps_binary_archive_bytes(tmp_path, monkeypatch):
+    home_root = tmp_path / "home"
+    target_dir = home_root / "datasets"
+    home_root.mkdir(parents=True)
+    target_dir.mkdir(parents=True)
+
+    archive_buffer = io.BytesIO()
+    with zipfile.ZipFile(archive_buffer, "w", zipfile.ZIP_DEFLATED) as zipped:
+        zipped.writestr("sample.txt", "hello zip")
+    archive_bytes = archive_buffer.getvalue()
+
+    monkeypatch.setattr(file_manager_service, "resolve_home_root", lambda: home_root.resolve())
+    monkeypatch.setattr(
+        file_manager_service.settings_service,
+        "resolve_output_root",
+        lambda: (tmp_path / "output" / "runs").resolve(),
+    )
+
+    async def run_case():
+        app = web.Application(client_max_size=16 * 1024 * 1024)
+        file_manager_routes.setup_file_manager_routes(app)
+        server = TestServer(app)
+        client = TestClient(server)
+        await client.start_server()
+        try:
+            form = FormData()
+            form.add_field("root", "home")
+            form.add_field("target_path", str(target_dir))
+            form.add_field(
+                "file",
+                archive_bytes,
+                filename="archive.zip",
+                content_type="application/zip",
+            )
+            response = await client.post("/api/file-manager/upload", data=form)
+            payload = await response.json()
+            return response.status, payload
+        finally:
+            await client.close()
+
+    status, payload = _run(run_case())
+
+    saved_path = target_dir / "archive.zip"
+    assert status == 200
+    assert payload["ok"] is True
+    assert saved_path.read_bytes() == archive_bytes
 
 
 def test_file_manager_routes_are_registered_before_static_catchalls():

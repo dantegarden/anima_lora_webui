@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 import tarfile
 from typing import Any
 import uuid
+import zipfile
 
 from web.services import settings_service
+
+
+@dataclass(frozen=True)
+class _ArchiveTarget:
+    member_name: str
+    target: Path
+    is_dir: bool
+    open_reader: Callable[[], Any] | None = None
 
 
 def resolve_home_root() -> Path:
@@ -77,7 +88,7 @@ def plan_extract_archive(
     overwrite: bool,
 ) -> dict[str, Any]:
     root = _resolve_root(root_id)
-    archive_path = _resolve_archive_file(root_id, raw_archive_path)
+    archive_path, archive_kind = _resolve_archive_file(root_id, raw_archive_path)
     target_dir = _resolve_managed_path(root_id, raw_target_dir)
     if not target_dir.exists():
         raise FileNotFoundError("目标目录不存在")
@@ -87,15 +98,15 @@ def plan_extract_archive(
     file_count = 0
     dir_count = 0
     conflicts: list[dict[str, str]] = []
-    for member, target in _iter_safe_archive_targets(root, archive_path, target_dir):
-        if member.isdir():
+    for member in _iter_safe_archive_targets(root, archive_path, target_dir, archive_kind=archive_kind):
+        if member.is_dir:
             dir_count += 1
-        elif member.isfile():
+        else:
             file_count += 1
-            if target.exists():
+            if member.target.exists():
                 conflicts.append({
-                    "member": member.name,
-                    "target": _display_path(target),
+                    "member": member.member_name,
+                    "target": _display_path(member.target),
                 })
 
     return {
@@ -103,6 +114,7 @@ def plan_extract_archive(
         "archive": {
             "name": archive_path.name,
             "path": _display_path(archive_path),
+            "kind": archive_kind,
         },
         "target_dir": _display_path(target_dir),
         "summary": {
@@ -140,6 +152,7 @@ def start_extract_job(
         "kind": "extract",
         "state": "queued",
         "archive_path": plan["archive"]["path"],
+        "archive_kind": plan["archive"]["kind"],
         "target_dir": plan["target_dir"],
         "overwrite": overwrite,
         "current": 0,
@@ -255,33 +268,37 @@ async def _run_extract_job(
     overwrite: bool,
 ) -> None:
     root = _resolve_root(root_id)
-    archive_path = _resolve_archive_file(root_id, raw_archive_path)
+    archive_path, archive_kind = _resolve_archive_file(root_id, raw_archive_path)
     target_dir = _resolve_managed_path(root_id, raw_target_dir)
     job["state"] = "running"
     job["message"] = "正在解压"
     try:
-        with tarfile.open(archive_path, "r:*") as tar:
-            for member, target in _iter_safe_archive_targets(root, archive_path, target_dir, tar=tar):
-                if member.isdir():
-                    target.mkdir(parents=True, exist_ok=True)
-                    continue
-                if not member.isfile():
-                    continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if target.exists() and not overwrite:
-                    raise ValueError(f"解压目标存在同名文件: {member.name}")
-                source = tar.extractfile(member)
-                if source is None:
-                    raise ValueError(f"无法读取归档成员: {member.name}")
-                with source, target.open("wb") as handle:
-                    while True:
-                        chunk = source.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        handle.write(chunk)
-                job["current"] += 1
-                job["message"] = f"已解压 {member.name}"
-                await asyncio.sleep(0)
+        for member in _iter_safe_archive_targets(
+            root,
+            archive_path,
+            target_dir,
+            archive_kind=archive_kind,
+        ):
+            if member.is_dir:
+                member.target.mkdir(parents=True, exist_ok=True)
+                continue
+            member.target.parent.mkdir(parents=True, exist_ok=True)
+            if member.target.exists() and not overwrite:
+                raise ValueError(f"解压目标存在同名文件: {member.member_name}")
+            if member.open_reader is None:
+                raise ValueError(f"无法读取归档成员: {member.member_name}")
+            source = member.open_reader()
+            if source is None:
+                raise ValueError(f"无法读取归档成员: {member.member_name}")
+            with source, member.target.open("wb") as handle:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+            job["current"] += 1
+            job["message"] = f"已解压 {member.member_name}"
+            await asyncio.sleep(0)
         job["state"] = "done"
         job["message"] = "解压完成"
     except Exception as exc:
@@ -333,18 +350,23 @@ def _resolve_managed_path(root_id: str, raw_path: str | None) -> Path:
     return candidate
 
 
-def _resolve_archive_file(root_id: str, raw_path: str) -> Path:
+def _resolve_archive_file(root_id: str, raw_path: str) -> tuple[Path, str]:
     target = _resolve_managed_path(root_id, raw_path)
     if not target.exists() or not target.is_file():
         raise FileNotFoundError("归档文件不存在")
-    if not _is_tar_archive(target):
-        raise ValueError("只支持 tar/tar.gz/tgz 归档")
-    return target
+    archive_kind = _detect_archive_kind(target)
+    if archive_kind is None:
+        raise ValueError("只支持 tar/tar.gz/tgz/zip 归档")
+    return target, archive_kind
 
 
-def _is_tar_archive(path: Path) -> bool:
+def _detect_archive_kind(path: Path) -> str | None:
     name = path.name.lower()
-    return name.endswith(".tar") or name.endswith(".tar.gz") or name.endswith(".tgz")
+    if name.endswith(".tar") or name.endswith(".tar.gz") or name.endswith(".tgz"):
+        return "tar"
+    if name.endswith(".zip"):
+        return "zip"
+    return None
 
 
 def _iter_safe_archive_targets(
@@ -352,28 +374,63 @@ def _iter_safe_archive_targets(
     archive_path: Path,
     target_dir: Path,
     *,
-    tar: tarfile.TarFile | None = None,
+    archive_kind: str,
 ):
-    if tar is None:
+    if archive_kind == "tar":
         with tarfile.open(archive_path, "r:*") as opened:
-            yield from _iter_safe_archive_targets(root, archive_path, target_dir, tar=opened)
-            return
-    for member in tar.getmembers():
-        path = PurePosixPath(member.name or "")
-        parts = [part for part in path.parts if part not in {"", "."}]
-        if not parts or path.is_absolute() or ".." in parts:
-            raise ValueError(f"归档成员路径不合法: {member.name}")
-        if member.issym() or member.islnk():
-            raise ValueError(f"归档成员不支持符号链接: {member.name}")
-        if not member.isdir() and not member.isfile():
-            raise ValueError(f"归档成员类型不支持: {member.name}")
-        target = (target_dir / Path(*parts)).resolve(strict=False)
-        try:
-            target.relative_to(root)
-        except ValueError as exc:
-            raise ValueError(f"归档成员越界: {member.name}") from exc
-        _reject_symlink_access(root, target)
-        yield member, target
+            for member in opened.getmembers():
+                target = _resolve_archive_member_target(root, target_dir, member.name)
+                if member.issym() or member.islnk():
+                    raise ValueError(f"归档成员不支持符号链接: {member.name}")
+                if member.isdir():
+                    yield _ArchiveTarget(member_name=member.name, target=target, is_dir=True)
+                    continue
+                if not member.isfile():
+                    raise ValueError(f"归档成员类型不支持: {member.name}")
+                yield _ArchiveTarget(
+                    member_name=member.name,
+                    target=target,
+                    is_dir=False,
+                    open_reader=lambda current=member: opened.extractfile(current),
+                )
+        return
+    if archive_kind == "zip":
+        with zipfile.ZipFile(archive_path, "r") as opened:
+            for member in opened.infolist():
+                target = _resolve_archive_member_target(root, target_dir, member.filename)
+                if _zip_info_is_symlink(member):
+                    raise ValueError(f"归档成员不支持符号链接: {member.filename}")
+                if member.is_dir():
+                    yield _ArchiveTarget(member_name=member.filename, target=target, is_dir=True)
+                    continue
+                yield _ArchiveTarget(
+                    member_name=member.filename,
+                    target=target,
+                    is_dir=False,
+                    open_reader=lambda current=member: opened.open(current, "r"),
+                )
+        return
+    raise ValueError("不支持的归档类型")
+
+
+def _resolve_archive_member_target(root: Path, target_dir: Path, member_name: str) -> Path:
+    normalized_name = str(member_name or "").replace("\\", "/")
+    path = PurePosixPath(normalized_name)
+    parts = [part for part in path.parts if part not in {"", "."}]
+    if not parts or path.is_absolute() or ".." in parts:
+        raise ValueError(f"归档成员路径不合法: {member_name}")
+    target = (target_dir / Path(*parts)).resolve(strict=False)
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"归档成员越界: {member_name}") from exc
+    _reject_symlink_access(root, target)
+    return target
+
+
+def _zip_info_is_symlink(member: zipfile.ZipInfo) -> bool:
+    mode = (member.external_attr >> 16) & 0o170000
+    return mode == 0o120000
 
 
 def _job_store(app: dict[str, Any]) -> dict[str, dict[str, Any]]:
