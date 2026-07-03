@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+import shutil
 import tarfile
 from typing import Any
 import uuid
@@ -211,6 +212,33 @@ def rename_entry(root_id: str, raw_path: str, new_name: str) -> dict[str, Any]:
             "name": target.name,
             "old_path": _display_path(source.parent / source.name),
             "new_path": _display_path(target),
+        },
+    }
+
+
+def delete_entry(root_id: str, raw_path: str) -> dict[str, Any]:
+    root = _resolve_root(root_id)
+    target = _resolve_managed_path(root_id, raw_path)
+    if not target.exists():
+        raise FileNotFoundError("删除目标不存在")
+    if target == root:
+        raise ValueError("不允许删除管理根目录")
+    if target.is_symlink():
+        raise ValueError("不允许操作符号链接")
+
+    kind = "dir" if target.is_dir() else "file"
+    deleted_path = _display_path(target)
+    if kind == "dir":
+        shutil.rmtree(target)
+    else:
+        target.unlink()
+
+    return {
+        "ok": True,
+        "deleted": {
+            "path": deleted_path,
+            "kind": kind,
+            "name": target.name,
         },
     }
 

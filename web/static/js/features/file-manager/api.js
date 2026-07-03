@@ -82,6 +82,16 @@ export async function renameFileManagerEntry(ctx, { root, path, newName } = {}) 
     });
 }
 
+export async function deleteFileManagerEntry(ctx, { root, path } = {}) {
+    return ctx.api('/api/file-manager/delete', {
+        method: 'POST',
+        body: JSON.stringify({
+            root,
+            path,
+        }),
+    });
+}
+
 export function buildFileManagerDownloadUrl(root, path) {
     const params = new URLSearchParams({ root, path });
     return `/api/file-manager/download?${params.toString()}`;

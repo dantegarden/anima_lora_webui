@@ -259,6 +259,53 @@ def test_file_manager_rename_entry_rejects_conflicts_and_invalid_name(tmp_path, 
         file_manager_service.rename_entry("home", str(source), "../escape.tar")
 
 
+def test_file_manager_delete_entry_removes_file_and_directory_recursively(tmp_path, monkeypatch):
+    home_root = tmp_path / "home"
+    dataset_dir = home_root / "datasets"
+    nested_dir = dataset_dir / "nested"
+    file_path = dataset_dir / "sample.txt"
+    nested_file = nested_dir / "child.txt"
+    home_root.mkdir(parents=True)
+    nested_dir.mkdir(parents=True)
+    file_path.write_text("payload", encoding="utf-8")
+    nested_file.write_text("child", encoding="utf-8")
+
+    monkeypatch.setattr(file_manager_service, "resolve_home_root", lambda: home_root.resolve())
+    monkeypatch.setattr(
+        file_manager_service.settings_service,
+        "resolve_output_root",
+        lambda: (tmp_path / "output" / "runs").resolve(),
+    )
+
+    deleted_file = file_manager_service.delete_entry("home", str(file_path))
+    deleted_dir = file_manager_service.delete_entry("home", str(dataset_dir))
+
+    assert deleted_file["ok"] is True
+    assert deleted_file["deleted"]["kind"] == "file"
+    assert deleted_file["deleted"]["path"] == file_path.resolve().as_posix()
+    assert not file_path.exists()
+
+    assert deleted_dir["ok"] is True
+    assert deleted_dir["deleted"]["kind"] == "dir"
+    assert deleted_dir["deleted"]["path"] == dataset_dir.resolve().as_posix()
+    assert not dataset_dir.exists()
+
+
+def test_file_manager_delete_entry_rejects_managed_root(tmp_path, monkeypatch):
+    home_root = tmp_path / "home"
+    home_root.mkdir(parents=True)
+
+    monkeypatch.setattr(file_manager_service, "resolve_home_root", lambda: home_root.resolve())
+    monkeypatch.setattr(
+        file_manager_service.settings_service,
+        "resolve_output_root",
+        lambda: (tmp_path / "output" / "runs").resolve(),
+    )
+
+    with pytest.raises(ValueError, match="根目录"):
+        file_manager_service.delete_entry("home", str(home_root))
+
+
 def test_file_manager_plan_extract_archive_supports_zip(tmp_path, monkeypatch):
     home_root = tmp_path / "home"
     archive_path = home_root / "dataset.zip"

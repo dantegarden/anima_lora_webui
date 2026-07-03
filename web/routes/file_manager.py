@@ -7,6 +7,7 @@ from urllib.parse import quote
 from aiohttp import web
 
 from web.services.file_manager_service import (
+    delete_entry,
     get_job_status,
     list_directory,
     list_roots,
@@ -27,6 +28,7 @@ def setup_file_manager_routes(app: web.Application) -> None:
     app.router.add_post("/api/file-manager/extract/run", handle_file_manager_extract_run)
     app.router.add_get("/api/file-manager/jobs/{job_id}", handle_file_manager_job_status)
     app.router.add_post("/api/file-manager/rename", handle_file_manager_rename)
+    app.router.add_post("/api/file-manager/delete", handle_file_manager_delete)
 
 
 async def handle_file_manager_roots(request: web.Request) -> web.Response:
@@ -159,6 +161,21 @@ async def handle_file_manager_rename(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": str(exc)}, status=404)
     except FileExistsError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=409)
+    except ValueError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=403)
+    return web.json_response(payload)
+
+
+async def handle_file_manager_delete(request: web.Request) -> web.Response:
+    data = await request.json()
+    root = str(data.get("root") or "").strip()
+    raw_path = str(data.get("path") or "").strip()
+    if not root or not raw_path:
+        return web.json_response({"ok": False, "error": "缺少删除参数"}, status=400)
+    try:
+        payload = delete_entry(root, raw_path)
+    except FileNotFoundError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=404)
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=403)
     return web.json_response(payload)

@@ -238,6 +238,32 @@ def test_file_manager_rename_route_returns_renamed_payload(monkeypatch):
     assert '"new_path": "/home/datasets/new-name.tar"' in response.text
 
 
+def test_file_manager_delete_route_returns_deleted_payload(monkeypatch):
+    class _JsonRequest(_FakeRequest):
+        async def json(self):
+            return {
+                "root": "home",
+                "path": "/home/datasets/old-dir",
+            }
+
+    monkeypatch.setattr(
+        file_manager_routes,
+        "delete_entry",
+        lambda root, path: {
+            "ok": True,
+            "deleted": {
+                "path": path,
+                "kind": "dir",
+            },
+        },
+    )
+
+    response = _run(file_manager_routes.handle_file_manager_delete(_JsonRequest()))
+
+    assert response.status == 200
+    assert '"kind": "dir"' in response.text
+
+
 def test_file_manager_upload_route_keeps_binary_archive_bytes(tmp_path, monkeypatch):
     home_root = tmp_path / "home"
     target_dir = home_root / "datasets"
@@ -297,3 +323,4 @@ def test_file_manager_routes_are_registered_before_static_catchalls():
     assert '"/api/file-manager/extract/run"' in source
     assert '"/api/file-manager/jobs/{job_id}"' in source
     assert '"/api/file-manager/rename"' in source
+    assert '"/api/file-manager/delete"' in source

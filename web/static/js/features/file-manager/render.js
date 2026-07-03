@@ -21,9 +21,9 @@ function formatMtime(value) {
     return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
 }
 
-function isExtractableTar(entry) {
+function isExtractableArchive(entry) {
     const name = String(entry?.name || '').toLowerCase();
-    return name.endsWith('.tar') || name.endsWith('.tar.gz') || name.endsWith('.tgz');
+    return name.endsWith('.tar') || name.endsWith('.tar.gz') || name.endsWith('.tgz') || name.endsWith('.zip');
 }
 
 export function createFileManagerRenderer({ state }) {
@@ -70,7 +70,8 @@ export function createFileManagerRenderer({ state }) {
                 <div class="file-manager-entry-actions">
                     ${entry.kind === 'dir' ? '<button class="btn btn-small" type="button" data-file-manager-action="open">进入</button>' : ''}
                     ${!entry.is_symlink ? '<button class="btn btn-small" type="button" data-file-manager-action="rename">重命名</button>' : ''}
-                    ${entry.kind === 'file' && !entry.is_symlink && isExtractableTar(entry) ? '<button class="btn btn-small" type="button" data-file-manager-action="extract">解压</button>' : ''}
+                    ${entry.kind === 'file' && !entry.is_symlink && isExtractableArchive(entry) ? '<button class="btn btn-small" type="button" data-file-manager-action="extract">解压</button>' : ''}
+                    ${!entry.is_symlink ? '<button class="btn btn-small btn-subtle-danger" type="button" data-file-manager-action="delete">删除</button>' : ''}
                     ${entry.kind === 'file' ? '<button class="btn btn-small btn-primary" type="button" data-file-manager-action="download">下载</button>' : ''}
                 </div>
             </div>

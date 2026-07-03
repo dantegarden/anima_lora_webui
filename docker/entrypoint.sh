@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+mkdir -p /home/ubuntu/datasets
 mkdir -p /var/run/sshd
 
 # Set the root password; callers can override it with SSH_PASSWORD.
@@ -27,6 +28,14 @@ do
 done
 IFS=$OLD
 EOF
+fi
+
+MODEL_DOWNLOAD_SCRIPT="/workspace/anima_lora_webui/scripts/download_models_from_oss.sh"
+if [ -x "$MODEL_DOWNLOAD_SCRIPT" ]; then
+    echo "[entrypoint] downloading OSS models before starting services..."
+    "$MODEL_DOWNLOAD_SCRIPT"
+else
+    echo "[entrypoint] model download script not found or not executable: $MODEL_DOWNLOAD_SCRIPT" >&2
 fi
 
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/anima_lora.conf

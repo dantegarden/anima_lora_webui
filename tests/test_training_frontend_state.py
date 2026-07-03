@@ -504,6 +504,7 @@ def test_file_manager_feature_modules_are_loaded_from_production_entrypoint() ->
     assert "planAndRunExtract" in file_manager_index
     assert "pollExtractJob" in file_manager_index
     assert "renameCurrentEntry" in file_manager_index
+    assert "deleteCurrentEntry" in file_manager_index
     assert "window.confirm(" in file_manager_index
     assert "window.prompt(" in file_manager_index
     assert "fetchFileManagerRoots" in file_manager_api
@@ -513,6 +514,7 @@ def test_file_manager_feature_modules_are_loaded_from_production_entrypoint() ->
     assert "runFileManagerExtract" in file_manager_api
     assert "fetchFileManagerJobStatus" in file_manager_api
     assert "renameFileManagerEntry" in file_manager_api
+    assert "deleteFileManagerEntry" in file_manager_api
     assert "'/api/file-manager/roots'" in file_manager_api
     assert "'/api/file-manager/list'" in file_manager_api
     assert "'/api/file-manager/upload'" in file_manager_api
@@ -520,6 +522,7 @@ def test_file_manager_feature_modules_are_loaded_from_production_entrypoint() ->
     assert "'/api/file-manager/extract/run'" in file_manager_api
     assert "'/api/file-manager/jobs/'" in file_manager_api
     assert "'/api/file-manager/rename'" in file_manager_api
+    assert "'/api/file-manager/delete'" in file_manager_api
     assert "buildFileManagerDownloadUrl" in file_manager_api
     assert "new XMLHttpRequest()" in file_manager_api
     assert "xhr.upload?.addEventListener('progress'" in file_manager_api

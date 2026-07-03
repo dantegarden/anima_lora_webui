@@ -1,5 +1,6 @@
 import {
     buildFileManagerDownloadUrl,
+    deleteFileManagerEntry,
     fetchFileManagerJobStatus,
     fetchFileManagerList,
     fetchFileManagerRoots,
@@ -124,6 +125,10 @@ export function createFileManagerFeature(ctx) {
             }
             if (action === 'rename') {
                 renameCurrentEntry(entryPath);
+                return;
+            }
+            if (action === 'delete') {
+                deleteCurrentEntry(entryPath, kind);
             }
         });
     }
@@ -275,6 +280,34 @@ export function createFileManagerFeature(ctx) {
             await loadCurrentDirectory({ force: true });
         } catch (error) {
             renderer.setStatus(`重命名失败: ${error.message}`, 'error');
+        }
+    }
+
+    async function deleteCurrentEntry(entryPath, kind) {
+        if (!entryPath) {
+            renderer.setStatus('缺少删除路径。', 'error');
+            return;
+        }
+        const currentName = entryPath.split('/').filter(Boolean).pop() || entryPath;
+        const targetLabel = kind === 'dir' ? '目录' : '文件';
+        const confirmed = window.confirm(
+            kind === 'dir'
+                ? `确认递归删除目录 ${currentName} 及其全部内容吗？此操作不可撤销。`
+                : `确认删除文件 ${currentName} 吗？此操作不可撤销。`,
+        );
+        if (!confirmed) {
+            renderer.setStatus('已取消删除。', '');
+            return;
+        }
+        try {
+            const payload = await deleteFileManagerEntry(ctx, {
+                root: state.currentRoot,
+                path: entryPath,
+            });
+            renderer.setStatus(`已删除${targetLabel} ${payload.deleted?.name || currentName}`, 'ok');
+            await loadCurrentDirectory({ force: true });
+        } catch (error) {
+            renderer.setStatus(`删除失败: ${error.message}`, 'error');
         }
     }
 
