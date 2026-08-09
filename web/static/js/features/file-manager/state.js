@@ -10,6 +10,7 @@ export function createFileManagerState() {
         uploadTarget: '',
         uploadProgress: 0,
         extractJobId: '',
+        selectedPaths: new Set(),
         lastPayload: null,
     };
 }

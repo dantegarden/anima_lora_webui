@@ -92,6 +92,13 @@ export async function deleteFileManagerEntry(ctx, { root, path } = {}) {
     });
 }
 
+export async function deleteFileManagerEntries(ctx, { root, paths } = {}) {
+    return ctx.api('/api/file-manager/delete', {
+        method: 'POST',
+        body: JSON.stringify({ root, paths }),
+    });
+}
+
 export function buildFileManagerDownloadUrl(root, path) {
     const params = new URLSearchParams({ root, path });
     return `/api/file-manager/download?${params.toString()}`;

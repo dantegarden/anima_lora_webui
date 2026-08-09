@@ -53,12 +53,18 @@ export function createFileManagerRenderer({ state }) {
             if (!search) return true;
             return String(entry.name || '').toLowerCase().includes(search);
         });
+        const availablePaths = new Set((state.entries || [])
+            .filter((entry) => !entry.is_symlink)
+            .map((entry) => entry.path));
+        state.selectedPaths = new Set([...state.selectedPaths].filter((path) => availablePaths.has(path)));
+        updateSelectionControls();
         if (!entries.length) {
             list.innerHTML = '<div class="file-manager-empty">当前目录没有可显示的条目。</div>';
             return;
         }
         list.innerHTML = entries.map((entry) => `
             <div class="file-manager-entry" data-entry-path="${escapeHtml(entry.path)}" data-entry-kind="${escapeHtml(entry.kind)}" data-entry-symlink="${entry.is_symlink ? '1' : '0'}">
+                <input class="file-manager-entry-select" type="checkbox" aria-label="选择 ${escapeHtml(entry.name)}" data-file-manager-select${state.selectedPaths.has(entry.path) ? ' checked' : ''}${entry.is_symlink ? ' disabled' : ''}>
                 <div class="file-manager-entry-main">
                     <strong>${escapeHtml(entry.name)}</strong>
                     <span>${entry.kind === 'dir' ? '目录' : '文件'}${entry.is_symlink ? ' · 符号链接' : ''}</span>
@@ -76,6 +82,15 @@ export function createFileManagerRenderer({ state }) {
                 </div>
             </div>
         `).join('');
+    }
+
+    function updateSelectionControls() {
+        const button = document.getElementById('btn-file-manager-delete-selected');
+        const count = state.selectedPaths.size;
+        if (button) {
+            button.disabled = count === 0;
+            button.textContent = count ? `删除所选 (${count})` : '删除所选';
+        }
     }
 
     function setStatus(message, tone = '') {
@@ -100,6 +115,7 @@ export function createFileManagerRenderer({ state }) {
     return {
         renderRoots,
         renderDirectory,
+        updateSelectionControls,
         setStatus,
         setUploadProgress,
     };

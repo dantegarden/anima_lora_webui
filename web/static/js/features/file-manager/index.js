@@ -1,6 +1,7 @@
 import {
     buildFileManagerDownloadUrl,
     deleteFileManagerEntry,
+    deleteFileManagerEntries,
     fetchFileManagerJobStatus,
     fetchFileManagerList,
     fetchFileManagerRoots,
@@ -8,9 +9,9 @@ import {
     renameFileManagerEntry,
     runFileManagerExtract,
     uploadFileManagerFile,
-} from './api.js?v=module-bootstrap-20260627-3';
-import { createFileManagerRenderer } from './render.js?v=module-bootstrap-20260627-3';
-import { createFileManagerState } from './state.js?v=module-bootstrap-20260627-3';
+} from './api.js?v=module-bootstrap-20260802-1';
+import { createFileManagerRenderer } from './render.js?v=module-bootstrap-20260802-1';
+import { createFileManagerState } from './state.js?v=module-bootstrap-20260802-1';
 
 export function createFileManagerFeature(ctx) {
     const state = createFileManagerState();
@@ -98,6 +99,16 @@ export function createFileManagerFeature(ctx) {
             state.uploadTarget = event.target.value || '';
         });
         document.getElementById('btn-file-manager-upload')?.addEventListener('click', uploadSelectedFile);
+        document.getElementById('btn-file-manager-delete-selected')?.addEventListener('click', deleteSelectedEntries);
+        document.getElementById('file-manager-list')?.addEventListener('change', (event) => {
+            const checkbox = event.target.closest('[data-file-manager-select]');
+            const row = event.target.closest('.file-manager-entry');
+            if (!checkbox || !row) return;
+            const entryPath = row.dataset.entryPath || '';
+            if (checkbox.checked) state.selectedPaths.add(entryPath);
+            else state.selectedPaths.delete(entryPath);
+            renderer.updateSelectionControls();
+        });
         document.getElementById('file-manager-list')?.addEventListener('click', (event) => {
             const button = event.target.closest('[data-file-manager-action]');
             const row = event.target.closest('.file-manager-entry');
@@ -147,10 +158,12 @@ export function createFileManagerFeature(ctx) {
             return;
         }
         state.uploading = true;
+        const autoExtract = Boolean(document.getElementById('file-manager-auto-extract')?.checked);
         renderer.setUploadProgress(0, '准备上传...');
         renderer.setStatus(`正在上传到 ${targetPath} ...`, '');
+        let payload;
         try {
-            const payload = await uploadFileManagerFile(ctx, {
+            payload = await uploadFileManagerFile(ctx, {
                 root: state.currentRoot,
                 targetPath,
                 file,
@@ -172,20 +185,25 @@ export function createFileManagerFeature(ctx) {
                     : `上传完成：${payload.uploaded?.name || file.name}`,
                 'ok',
             );
-            if (document.getElementById('file-manager-auto-extract')?.checked) {
-                await planAndRunExtract(payload.uploaded?.path || `${targetPath}/${file.name}`, targetPath);
-                return;
-            }
-            await loadCurrentDirectory({ force: true });
         } catch (error) {
             renderer.setStatus(`上传失败: ${error.message}`, 'error');
             renderer.setUploadProgress(state.uploadProgress || 0, '上传失败');
+            return;
         } finally {
             state.uploading = false;
         }
+        if (autoExtract) {
+            await planAndRunExtract(
+                payload.uploaded?.path || `${targetPath}/${file.name}`,
+                targetPath,
+                { confirm: false },
+            );
+            return;
+        }
+        await loadCurrentDirectory({ force: true });
     }
 
-    async function planAndRunExtract(archivePath, targetDir) {
+    async function planAndRunExtract(archivePath, targetDir, options = {}) {
         if (!archivePath || !targetDir) {
             renderer.setStatus('缺少解压路径参数。', 'error');
             return;
@@ -202,19 +220,20 @@ export function createFileManagerFeature(ctx) {
             }
             const summary = plan.summary || {};
             const conflicts = plan.conflicts || [];
-            const confirmMessage = [
-                `即将解压 ${plan.archive?.name || archivePath}`,
-                `目标目录: ${plan.target_dir || targetDir}`,
-                `文件数: ${summary.files || 0}`,
-                `目录数: ${summary.dirs || 0}`,
-                `冲突数: ${summary.conflicts || 0}`,
-                conflicts.length ? `冲突示例: ${conflicts.map((item) => item.member).join(', ')}` : '没有发现冲突',
-                summary.conflicts ? '确认后将以覆盖模式继续解压。' : '确认后开始解压。',
-            ].join('\n');
-            const confirmed = window.confirm(confirmMessage);
-            if (!confirmed) {
-                renderer.setStatus('已取消解压。', '');
-                return;
+            if (options.confirm !== false) {
+                const confirmMessage = [
+                    `即将解压 ${plan.archive?.name || archivePath}`,
+                    `目标目录: ${plan.target_dir || targetDir}`,
+                    `文件数: ${summary.files || 0}`,
+                    `目录数: ${summary.dirs || 0}`,
+                    `冲突数: ${summary.conflicts || 0}`,
+                    conflicts.length ? `冲突示例: ${conflicts.map((item) => item.member).join(', ')}` : '没有发现冲突',
+                    summary.conflicts ? '确认后将以覆盖模式继续解压。' : '确认后开始解压。',
+                ].join('\n');
+                if (!window.confirm(confirmMessage)) {
+                    renderer.setStatus('已取消解压。', '');
+                    return;
+                }
             }
             const started = await runFileManagerExtract(ctx, {
                 root: state.currentRoot,
@@ -239,12 +258,9 @@ export function createFileManagerFeature(ctx) {
         while (true) {
             const payload = await fetchFileManagerJobStatus(ctx, jobId);
             const job = payload.job || {};
-            renderer.setStatus(
-                job.message || `解压任务状态: ${job.state || 'unknown'} (${job.current || 0}/${job.total || 0})`,
-                job.state === 'error' ? 'error' : '',
-            );
+            renderer.setStatus(formatExtractProgress(job), job.state === 'error' ? 'error' : '');
             if (job.state === 'done') {
-                renderer.setStatus(`解压完成 (${job.current || 0}/${job.total || 0})`, 'ok');
+                renderer.setStatus(formatExtractProgress(job), 'ok');
                 return;
             }
             if (job.state === 'error') {
@@ -252,6 +268,22 @@ export function createFileManagerFeature(ctx) {
             }
             await new Promise((resolve) => window.setTimeout(resolve, 1000));
         }
+    }
+
+    function formatExtractProgress(job = {}) {
+        const current = Number(job.current || 0);
+        const total = Number(job.total || 0);
+        const percent = Number.isFinite(Number(job.percent))
+            ? Number(job.percent)
+            : (total ? Math.round(current * 100 / total) : 0);
+        const stateLabel = {
+            queued: '等待解压',
+            running: '正在解压',
+            done: '解压完成',
+            error: '解压失败',
+        }[job.state] || '解压处理中';
+        const detail = job.message && job.message !== stateLabel ? ` · ${job.message}` : '';
+        return `${stateLabel} ${current}/${total} (${percent}%)${detail}`;
     }
 
     async function renameCurrentEntry(entryPath) {
@@ -308,6 +340,23 @@ export function createFileManagerFeature(ctx) {
             await loadCurrentDirectory({ force: true });
         } catch (error) {
             renderer.setStatus(`删除失败: ${error.message}`, 'error');
+        }
+    }
+
+    async function deleteSelectedEntries() {
+        const paths = [...state.selectedPaths];
+        if (!paths.length) return;
+        if (!window.confirm(`确认删除所选 ${paths.length} 个文件或目录吗？目录将连同其全部内容递归删除，此操作不可撤销。`)) {
+            renderer.setStatus('已取消批量删除。', '');
+            return;
+        }
+        try {
+            const payload = await deleteFileManagerEntries(ctx, { root: state.currentRoot, paths });
+            state.selectedPaths.clear();
+            renderer.setStatus(`已删除 ${payload.deleted_count || 0} 个文件或目录`, 'ok');
+            await loadCurrentDirectory({ force: true });
+        } catch (error) {
+            renderer.setStatus(`批量删除失败: ${error.message}`, 'error');
         }
     }
 

@@ -503,6 +503,14 @@ def test_file_manager_feature_modules_are_loaded_from_production_entrypoint() ->
     assert "loadCurrentDirectory" in file_manager_index
     assert "planAndRunExtract" in file_manager_index
     assert "pollExtractJob" in file_manager_index
+    assert "confirm: false" in file_manager_index
+    assert "state.uploading = false" in _section(
+        file_manager_index,
+        "async function uploadSelectedFile",
+        "async function planAndRunExtract",
+    ).split("planAndRunExtract", 1)[0]
+    assert "formatExtractProgress" in file_manager_index
+    assert "deleteSelectedEntries" in file_manager_index
     assert "renameCurrentEntry" in file_manager_index
     assert "deleteCurrentEntry" in file_manager_index
     assert "window.confirm(" in file_manager_index
@@ -544,6 +552,7 @@ def test_file_manager_feature_modules_are_loaded_from_production_entrypoint() ->
     assert 'id="btn-file-manager-upload"' in html
     assert 'id="file-manager-upload-progress"' in html
     assert 'id="file-manager-auto-extract"' in html
+    assert 'id="btn-file-manager-delete-selected"' in html
     assert 'id="file-manager-breadcrumb"' in html
     assert 'id="file-manager-status"' in html
     assert 'id="file-manager-list"' in html

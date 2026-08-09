@@ -264,6 +264,30 @@ def test_file_manager_delete_route_returns_deleted_payload(monkeypatch):
     assert '"kind": "dir"' in response.text
 
 
+def test_file_manager_delete_route_accepts_multiple_paths(monkeypatch):
+    class _JsonRequest(_FakeRequest):
+        async def json(self):
+            return {
+                "root": "home",
+                "paths": ["/home/datasets/a.txt", "/home/datasets/nested"],
+            }
+
+    monkeypatch.setattr(
+        file_manager_routes,
+        "delete_entries",
+        lambda root, paths: {
+            "ok": True,
+            "deleted_count": len(paths),
+            "deleted": [{"path": path} for path in paths],
+        },
+    )
+
+    response = _run(file_manager_routes.handle_file_manager_delete(_JsonRequest()))
+
+    assert response.status == 200
+    assert '"deleted_count": 2' in response.text
+
+
 def test_file_manager_upload_route_keeps_binary_archive_bytes(tmp_path, monkeypatch):
     home_root = tmp_path / "home"
     target_dir = home_root / "datasets"

@@ -8,6 +8,7 @@ from aiohttp import web
 
 from web.services.file_manager_service import (
     delete_entry,
+    delete_entries,
     get_job_status,
     list_directory,
     list_roots,
@@ -170,10 +171,13 @@ async def handle_file_manager_delete(request: web.Request) -> web.Response:
     data = await request.json()
     root = str(data.get("root") or "").strip()
     raw_path = str(data.get("path") or "").strip()
-    if not root or not raw_path:
+    raw_paths = data.get("paths")
+    if raw_paths is not None and not isinstance(raw_paths, list):
+        return web.json_response({"ok": False, "error": "paths 参数必须是数组"}, status=400)
+    if not root or (not raw_path and not raw_paths):
         return web.json_response({"ok": False, "error": "缺少删除参数"}, status=400)
     try:
-        payload = delete_entry(root, raw_path)
+        payload = delete_entries(root, raw_paths) if raw_paths is not None else delete_entry(root, raw_path)
     except FileNotFoundError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=404)
     except ValueError as exc:

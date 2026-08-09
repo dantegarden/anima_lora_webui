@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 from library.datasets.buckets import (
     CONSTANT_TOKEN_BUCKETS,
@@ -25,6 +26,17 @@ def _write_image(path: Path, size: tuple[int, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     arr = np.zeros((size[1], size[0], 3), dtype=np.uint8)
     Image.fromarray(arr).save(path)
+
+
+def _write_truncated_png(path: Path, size: tuple[int, int] = (512, 512)) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    meta = PngInfo()
+    meta.add_text("parameters", "hello")
+    Image.new("RGB", size, (255, 0, 0)).save(path, pnginfo=meta)
+    data = path.read_bytes()
+    idat_index = data.find(b"IDAT")
+    assert idat_index > 0
+    path.write_bytes(data[: idat_index + 50])
 
 
 def test_walk_images_flat(tmp_path: Path) -> None:
@@ -230,6 +242,32 @@ def test_resize_to_buckets_uses_scaled_constant_buckets_for_768(tmp_path: Path) 
     assert bucket not in set(CONSTANT_TOKEN_BUCKETS)
     with Image.open(dst / "portrait.png") as image:
         assert image.size == bucket
+
+
+def test_scan_images_for_preprocess_failures_reports_truncated_png(tmp_path: Path) -> None:
+    from library.image_scan import scan_images_for_preprocess_failures
+
+    src = tmp_path / "src"
+    _write_truncated_png(src / "broken.png")
+
+    failures = scan_images_for_preprocess_failures(src)
+
+    assert len(failures) == 1
+    failure = failures[0]
+    assert failure.path == src / "broken.png"
+    assert failure.stage in {"png_text", "decode_rgb"}
+    assert failure.error_type == "OSError"
+
+
+def test_scan_images_for_preprocess_failures_skips_healthy_images(tmp_path: Path) -> None:
+    from library.image_scan import scan_images_for_preprocess_failures
+
+    src = tmp_path / "src"
+    _write_image(src / "ok.png", (900, 900))
+
+    failures = scan_images_for_preprocess_failures(src)
+
+    assert failures == []
 
 
 def test_backup_caption_sidecars_mirrors_nested_layout(tmp_path: Path) -> None:

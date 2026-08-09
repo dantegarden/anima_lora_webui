@@ -306,6 +306,53 @@ def test_file_manager_delete_entry_rejects_managed_root(tmp_path, monkeypatch):
         file_manager_service.delete_entry("home", str(home_root))
 
 
+def test_file_manager_delete_entries_removes_files_and_directories(tmp_path, monkeypatch):
+    home_root = tmp_path / "home"
+    dataset_dir = home_root / "datasets"
+    nested_dir = dataset_dir / "nested"
+    file_path = dataset_dir / "sample.txt"
+    nested_dir.mkdir(parents=True)
+    file_path.write_text("payload", encoding="utf-8")
+    (nested_dir / "child.txt").write_text("child", encoding="utf-8")
+
+    monkeypatch.setattr(file_manager_service, "resolve_home_root", lambda: home_root.resolve())
+    monkeypatch.setattr(
+        file_manager_service.settings_service,
+        "resolve_output_root",
+        lambda: (tmp_path / "output" / "runs").resolve(),
+    )
+
+    payload = file_manager_service.delete_entries(
+        "home",
+        [str(file_path), str(nested_dir)],
+    )
+
+    assert payload["ok"] is True
+    assert payload["deleted_count"] == 2
+    assert {item["kind"] for item in payload["deleted"]} == {"file", "dir"}
+    assert not file_path.exists()
+    assert not nested_dir.exists()
+
+
+def test_file_manager_delete_entries_validates_every_target_before_deleting(tmp_path, monkeypatch):
+    home_root = tmp_path / "home"
+    file_path = home_root / "keep.txt"
+    home_root.mkdir(parents=True)
+    file_path.write_text("keep", encoding="utf-8")
+
+    monkeypatch.setattr(file_manager_service, "resolve_home_root", lambda: home_root.resolve())
+    monkeypatch.setattr(
+        file_manager_service.settings_service,
+        "resolve_output_root",
+        lambda: (tmp_path / "output" / "runs").resolve(),
+    )
+
+    with pytest.raises(ValueError, match="根目录"):
+        file_manager_service.delete_entries("home", [str(file_path), str(home_root)])
+
+    assert file_path.read_text(encoding="utf-8") == "keep"
+
+
 def test_file_manager_plan_extract_archive_supports_zip(tmp_path, monkeypatch):
     home_root = tmp_path / "home"
     archive_path = home_root / "dataset.zip"
@@ -380,5 +427,6 @@ def test_file_manager_extract_job_unpacks_zip_after_confirmation(tmp_path, monke
     status = asyncio.run(run_case())
 
     assert status["job"]["state"] == "done"
+    assert status["job"]["percent"] == 100
     assert (target_dir / "a.txt").read_text(encoding="utf-8") == "alpha"
     assert (target_dir / "nested" / "b.txt").read_text(encoding="utf-8") == "beta"

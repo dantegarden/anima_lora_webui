@@ -158,6 +158,7 @@ def start_extract_job(
         "overwrite": overwrite,
         "current": 0,
         "total": plan["summary"]["files"],
+        "percent": 0,
         "message": "等待解压",
         "error": "",
     }
@@ -217,30 +218,47 @@ def rename_entry(root_id: str, raw_path: str, new_name: str) -> dict[str, Any]:
 
 
 def delete_entry(root_id: str, raw_path: str) -> dict[str, Any]:
+    payload = delete_entries(root_id, [raw_path])
+    return {"ok": True, "deleted": payload["deleted"][0]}
+
+
+def delete_entries(root_id: str, raw_paths: list[str]) -> dict[str, Any]:
     root = _resolve_root(root_id)
-    target = _resolve_managed_path(root_id, raw_path)
-    if not target.exists():
-        raise FileNotFoundError("删除目标不存在")
-    if target == root:
-        raise ValueError("不允许删除管理根目录")
-    if target.is_symlink():
-        raise ValueError("不允许操作符号链接")
+    if not isinstance(raw_paths, list) or not raw_paths:
+        raise ValueError("至少选择一个删除目标")
 
-    kind = "dir" if target.is_dir() else "file"
-    deleted_path = _display_path(target)
-    if kind == "dir":
-        shutil.rmtree(target)
-    else:
-        target.unlink()
+    targets: list[Path] = []
+    for raw_path in raw_paths:
+        target = _resolve_managed_path(root_id, str(raw_path or ""))
+        if not target.exists():
+            raise FileNotFoundError(f"删除目标不存在: {raw_path}")
+        if target == root:
+            raise ValueError("不允许删除管理根目录")
+        if target.is_symlink():
+            raise ValueError("不允许操作符号链接")
+        if target not in targets:
+            targets.append(target)
 
-    return {
-        "ok": True,
-        "deleted": {
-            "path": deleted_path,
-            "kind": kind,
+    selected = set(targets)
+    effective_targets = [
+        target for target in targets
+        if not any(parent in selected for parent in target.parents)
+    ]
+    deleted = [
+        {
+            "path": _display_path(target),
+            "kind": "dir" if target.is_dir() else "file",
             "name": target.name,
-        },
-    }
+        }
+        for target in effective_targets
+    ]
+    for target, item in zip(effective_targets, deleted, strict=True):
+        if item["kind"] == "dir":
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+
+    return {"ok": True, "deleted": deleted, "deleted_count": len(deleted)}
 
 
 async def save_uploaded_file(root_id: str, raw_target_dir: str, field: Any) -> dict[str, Any]:
@@ -325,9 +343,11 @@ async def _run_extract_job(
                         break
                     handle.write(chunk)
             job["current"] += 1
+            job["percent"] = round(job["current"] * 100 / job["total"]) if job["total"] else 100
             job["message"] = f"已解压 {member.member_name}"
             await asyncio.sleep(0)
         job["state"] = "done"
+        job["percent"] = 100
         job["message"] = "解压完成"
     except Exception as exc:
         job["state"] = "error"

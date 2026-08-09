@@ -1,5 +1,8 @@
 FROM ubuntu:25.04
 
+ARG OSSUTIL_VERSION=2.2.0
+ARG TARGETARCH
+
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Etc/UTC \
     PYTHONUNBUFFERED=1 \
@@ -10,7 +13,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WEBUI_HOST=0.0.0.0 \
     WEBUI_PORT=20102 \
     SHELLINABOX_PORT=4200 \
-    SSH_PASSWORD=MSgouUQP4vhET \
     PATH=/root/.local/bin:/workspace/anima_lora_webui/.venv/bin:${PATH}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -42,6 +44,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+RUN case "${TARGETARCH}" in amd64|arm64) ;; *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; esac \
+ && archive="ossutil-${OSSUTIL_VERSION}-linux-${TARGETARCH}.zip" \
+ && curl -fsSL --retry 3 -o "/tmp/${archive}" \
+      "https://gosspublic.alicdn.com/ossutil/v2/${OSSUTIL_VERSION}/${archive}" \
+ && unzip -q "/tmp/${archive}" -d /tmp/ossutil \
+ && install -m 0755 "/tmp/ossutil/ossutil-${OSSUTIL_VERSION}-linux-${TARGETARCH}/ossutil" /usr/local/bin/ossutil \
+ && rm -rf "/tmp/${archive}" /tmp/ossutil \
+ && ossutil version
 
 RUN wget -O /usr/local/bin/dumb-init https://bizy-air.oss-cn-beijing.aliyuncs.com/dumb-init_1.2.5_x86_64 \
  && chmod +x /usr/local/bin/dumb-init

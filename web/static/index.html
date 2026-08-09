@@ -1272,7 +1272,7 @@
                         <div>
                             <span class="file-manager-eyebrow">FILE MANAGER</span>
                             <strong>文件管理</strong>
-                            <span>浏览 `/home` 和训练输出目录，当前阶段先开放只读浏览与单文件下载。</span>
+                            <span>浏览 `/home` 和训练输出目录，支持上传、解压、重命名、下载与批量删除。</span>
                         </div>
                     </div>
                     <div class="file-manager-toolbar">
@@ -1299,7 +1299,7 @@
                         <button id="btn-file-manager-upload" class="btn btn-primary" type="button">上传文件</button>
                         <label class="file-manager-extract-hint">
                             <input id="file-manager-auto-extract" type="checkbox">
-                            <span>上传完成后自动解压 tar 包</span>
+                            <span>上传完成后自动解压压缩包</span>
                         </label>
                         <progress id="file-manager-upload-progress" class="file-manager-upload-progress" max="100" value="0" hidden></progress>
                         <div id="file-manager-upload-progress-text" class="file-manager-upload-progress-text"></div>
@@ -1309,6 +1309,7 @@
                             <span>搜索当前目录</span>
                             <input id="file-manager-search" type="search" placeholder="按名称过滤当前目录">
                         </label>
+                        <button id="btn-file-manager-delete-selected" class="btn btn-subtle-danger" type="button" disabled>删除所选</button>
                         <div id="file-manager-breadcrumb" class="file-manager-breadcrumb">-</div>
                     </div>
                     <div id="file-manager-status" class="file-manager-status" aria-live="polite">打开本页后会自动读取白名单目录。</div>
@@ -1543,6 +1544,6 @@
 
     <div id="config-switch-toast" class="config-switch-toast" role="status" aria-live="polite" hidden></div>
 
-    <script type="module" src="/static/app.js?v=module-bootstrap-20260627-3"></script>
+    <script type="module" src="/static/app.js?v=module-bootstrap-20260802-1"></script>
 </body>
 </html>
