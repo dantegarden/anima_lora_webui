@@ -12,6 +12,7 @@ def test_root_password_default_is_owned_by_entrypoint_only() -> None:
 
     assert "SSH_PASSWORD=" not in dockerfile
     assert 'SSH_PASSWORD="${SSH_PASSWORD:-bizyair}"' in entrypoint
+    assert "rm -f /root/.config/code-server/config.yaml" in entrypoint
     assert "MSgouUQP4vhET" not in dockerfile
     assert "MSgouUQP4vhET" not in entrypoint
 

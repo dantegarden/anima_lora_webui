@@ -8,6 +8,8 @@ mkdir -p /var/run/sshd
 export SSH_PASSWORD="${SSH_PASSWORD:-bizyair}"
 echo "root:$SSH_PASSWORD" | chpasswd
 export PASSWORD="${CODE_SERVER_PASSWORD:-$SSH_PASSWORD}"
+# Ignore the build-time generated config so code-server uses the runtime password.
+rm -f /root/.config/code-server/config.yaml
 
 sed -ri 's/^#?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
 sed -ri 's/^#?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
