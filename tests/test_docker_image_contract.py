@@ -16,11 +16,21 @@ def test_root_password_default_is_owned_by_entrypoint_only() -> None:
     assert "MSgouUQP4vhET" not in entrypoint
 
 
-def test_docker_image_installs_versioned_ossutil_for_target_architecture() -> None:
+def test_docker_image_installs_latest_code_server_and_runs_it_externally() -> None:
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+    supervisor = (ROOT / "docker" / "supervisord.conf").read_text(encoding="utf-8")
+
+    assert "shellinabox" not in dockerfile.lower()
+    assert "shellinabox" not in supervisor.lower()
+    assert "https://code-server.dev/install.sh" in dockerfile
+    assert "CODE_SERVER_PORT=4200" in dockerfile
+    assert "[program:code-server]" in supervisor
+    assert "--bind-addr 0.0.0.0:%(ENV_CODE_SERVER_PORT)s" in supervisor
+    assert "--auth password" in supervisor
+
+
+def test_docker_image_installs_ossutil_with_official_installer() -> None:
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "ARG OSSUTIL_VERSION=" in dockerfile
-    assert "ARG TARGETARCH" in dockerfile
-    assert "ossutil-${OSSUTIL_VERSION}-linux-${TARGETARCH}.zip" in dockerfile
-    assert "/usr/local/bin/ossutil" in dockerfile
-    assert "ossutil version" in dockerfile
+    assert "https://gosspublic.alicdn.com/ossutil/install.sh" in dockerfile
+    assert "ossutil --version" in dockerfile
