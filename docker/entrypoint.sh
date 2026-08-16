@@ -7,7 +7,17 @@ mkdir -p /var/run/sshd
 # Set the root password; callers can override it with SSH_PASSWORD.
 export SSH_PASSWORD="${SSH_PASSWORD:-bizyair}"
 echo "root:$SSH_PASSWORD" | chpasswd
-export PASSWORD="${CODE_SERVER_PASSWORD:-$SSH_PASSWORD}"
+if [ -n "${CODE_SERVER_PASSWORD:-}" ]; then
+    PASSWORD="$CODE_SERVER_PASSWORD"
+    CODE_SERVER_PASSWORD_SOURCE="CODE_SERVER_PASSWORD"
+elif [ -n "${PASSWORD:-}" ]; then
+    CODE_SERVER_PASSWORD_SOURCE="PASSWORD"
+else
+    PASSWORD="$(openssl rand -hex 16)"
+    CODE_SERVER_PASSWORD_SOURCE="generated"
+fi
+export PASSWORD
+printf '[entrypoint] code-server password (%s): %s\n' "$CODE_SERVER_PASSWORD_SOURCE" "$PASSWORD"
 # Ignore the build-time generated config so code-server uses the runtime password.
 rm -f /root/.config/code-server/config.yaml
 
