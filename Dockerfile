@@ -9,6 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     UV_PYTHON_INSTALL_DIR=/opt/uv/python \
     WEBUI_HOST=0.0.0.0 \
     WEBUI_PORT=20102 \
+    CODE_SERVER_AUTH=password \
     CODE_SERVER_PORT=4200 \
     PATH=/root/.local/bin:/workspace/anima_lora_webui/.venv/bin:${PATH}
 
@@ -41,7 +42,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
+COPY docker/patch_code_server_extensions.js /usr/local/lib/patch_code_server_extensions.js
+
 RUN curl -fsSL https://code-server.dev/install.sh | sh \
+ && /usr/lib/code-server/lib/node /usr/local/lib/patch_code_server_extensions.js \
+      /usr/lib/code-server/lib/vscode/extensions \
  && code-server --version
 
 RUN curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash \
