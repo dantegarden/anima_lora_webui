@@ -25,7 +25,8 @@ seed = 42
 [network]
 rank = 32
 alpha = 32
-attn_mode = "flash"
+# No vendor flash-attn on Muxi/MACA; use PyTorch SDPA.
+attn_mode = "torch"
 # SmoothQuant-style per-channel input pre-scaling on the LoRA down projection
 # (vendored stats: networks/calibration/channel_stats.safetensors). 0.0 = off /
 # paper-faithful; 0.5 = sqrt balance; 1.0 = full flatten. inv_scale is baked into

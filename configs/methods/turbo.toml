@@ -36,7 +36,8 @@ student_rank = 64
 student_alpha = 64
 fake_rank = 64
 fake_alpha = 64
-attn_mode = "flash"
+# No vendor flash-attn on Muxi/MACA; use PyTorch SDPA.
+attn_mode = "torch"
 # Split the student into K = student_steps up-heads off a shared down-proj.
 # Head k serves denoise step k. This avoids diversity/quality gradients fighting
 # over one up-projection, but the output cannot be merged into a static DiT.

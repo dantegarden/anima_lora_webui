@@ -1,0 +1,96 @@
+# Muxi (MetaX/MACA) build of the Anima LoRA WebUI image.
+#
+# The base image is the known-good Muxi image used by the ComfyUI deployment.
+# It already contains the MetaX driver userspace, HPCC/MACA 3.8.2, a Python
+# 3.12 Conda environment and a MACA-enabled PyTorch 2.10 build.  Do not replace
+# that PyTorch with the CUDA wheel pinned by pyproject.toml: MACA cards need the
+# vendor build, and the upstream project pins Python 3.13 + Torch 2.12 for the
+# NVIDIA/CUDA image.
+FROM hub.6scloud.com/d1s6t1r3jrms73f3ltpg/comfyui-metax-c500-torch2dot10:v20261117-da3-colormap
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Shanghai \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1 \
+    UV_PROJECT_ENVIRONMENT=/workspace/anima_lora_webui/.venv \
+    WEBUI_HOST=0.0.0.0 \
+    WEBUI_PORT=20102 \
+    CODE_SERVER_AUTH=password \
+    CODE_SERVER_PORT=4200 \
+    TORCH_COMPILE_DISABLE=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    wget \
+    tar \
+    unzip \
+    vim \
+    inxi \
+    telnet \
+    tree \
+    openssh-server \
+    net-tools \
+    supervisor \
+    procps \
+    git \
+    git-lfs \
+    build-essential \
+    pkg-config \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    openssl \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+COPY docker/patch_code_server_extensions.js /usr/local/lib/patch_code_server_extensions.js
+
+RUN curl -fsSL https://code-server.dev/install.sh | sh \
+ && /usr/lib/code-server/lib/node /usr/local/lib/patch_code_server_extensions.js \
+      /usr/lib/code-server/lib/vscode/extensions \
+ && code-server --version
+
+RUN curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash \
+ && ossutil --version
+
+RUN wget -O /usr/local/bin/dumb-init https://bizy-air.oss-cn-beijing.aliyuncs.com/dumb-init_1.2.5_x86_64 \
+ && chmod +x /usr/local/bin/dumb-init
+
+WORKDIR /workspace/anima_lora_webui
+
+COPY . /workspace/anima_lora_webui
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/supervisord.conf /etc/supervisor/conf.d/anima_lora.conf
+
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+ && chmod +x /workspace/anima_lora_webui/scripts/download_models_from_oss.sh \
+ && git lfs install --system \
+ && mkdir -p /var/log/supervisor /var/run/sshd /workspace/anima_lora_webui/logs \
+ && mkdir -p /workspace/anima_lora_webui/models /workspace/anima_lora_webui/output \
+ && mkdir -p /workspace/anima_lora_webui/image_dataset /workspace/anima_lora_webui/post_image_dataset \
+ && /opt/conda/bin/python -m venv --system-site-packages /workspace/anima_lora_webui/.venv \
+ && .venv/bin/python -m pip install --upgrade pip \
+ && .venv/bin/python /workspace/anima_lora_webui/docker/muxi_constraints.py > /tmp/muxi-constraints.txt \
+ && /root/.local/bin/uv pip install --python /workspace/anima_lora_webui/.venv/bin/python \
+      --index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple \
+      --extra-index-url https://pypi.org/simple \
+      --constraint /tmp/muxi-constraints.txt \
+      -r /workspace/anima_lora_webui/requirements-muxi.txt \
+ && .venv/bin/python -c "import torch; print('Muxi torch:', torch.__version__)"
+
+ENV PATH=/workspace/anima_lora_webui/.venv/bin:/root/.local/bin:${PATH}
+
+EXPOSE 22 20102 4200
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+    CMD bash -lc "curl -fsS http://127.0.0.1:${WEBUI_PORT}/ >/dev/null || exit 1"
+
+ENTRYPOINT ["/usr/local/bin/dumb-init", "--", "/usr/local/bin/entrypoint.sh"]

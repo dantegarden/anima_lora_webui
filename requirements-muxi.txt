@@ -1,0 +1,51 @@
+# Runtime dependencies for the Muxi/MACA image.
+#
+# torch / torchvision / torchaudio are provided by the MetaX base image.
+# flash-attn, bitsandbytes and sam3 are intentionally omitted:
+#   - flash-attn is a CUDA-only prebuilt wheel; the app falls back to SDPA.
+#   - bitsandbytes ships CUDA kernels and only backs optional 8-bit optimizers.
+#   - sam3 builds CUDA extensions and is only used by the optional mask script.
+# PySide6 and ruff are omitted too: this image is headless WebUI/CLI only.
+accelerate==1.13.0
+alembic==1.18.4
+aiohttp==3.13.5
+albumentations==2.0.8
+av==17.0.1
+blake3==1.0.8
+comfy-aimdo==0.2.14
+comfy-cli==1.7.3
+comfy-kitchen==0.2.8
+diffusers==0.37.1
+einops==0.8.2
+huggingface-hub==1.9.0
+imagesize==2.0.0
+kornia==0.8.2
+lion-pytorch==0.2.4
+matplotlib==3.10.8
+numpy==2.2.6
+opencv-python==4.11.0.86
+packaging==26.0
+pillow==12.2.0
+prodigyopt==1.1.2
+psutil==7.2.2
+pycocotools==2.0.11
+pydantic-settings==2.14.0
+pytest==9.0.3
+pytorch-optimizer==3.10.0
+pyyaml==6.0.3
+rich==14.3.3
+safetensors==0.7.0
+schedulefree==1.4.1
+segmentation-models-pytorch==0.5.0
+sentencepiece==0.2.1
+simpleeval==1.0.7
+softtorch==0.1.1
+spandrel==0.4.2
+sqlalchemy==2.1.0b2
+tensorboard==2.20.0
+toml==0.10.2
+torchsde==0.2.6
+tqdm==4.67.3
+transformers==5.5.0
+voluptuous==0.16.0
+yarl==1.23.0

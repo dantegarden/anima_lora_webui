@@ -1,4 +1,11 @@
-"""GPU selection and nvidia-smi parsing helpers for WebUI training."""
+"""GPU selection and SMI parsing helpers for WebUI training.
+
+The NVIDIA path keeps using ``nvidia-smi``.  MetaX/MACA hosts expose
+``mx-smi`` instead, so both commands are probed before falling back to the
+PyTorch runtime (which knows how to enumerate the active accelerator backend).
+MetaX images ship ``ht-smi`` whose CLI is not nvidia-smi compatible; the
+PyTorch fallback is the reliable path there.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +14,7 @@ from typing import Any, Awaitable, Callable
 
 
 CreateSubprocessExec = Callable[..., Awaitable[Any]]
+SMI_COMMANDS = ("nvidia-smi", "mx-smi")
 
 
 async def get_gpu_stats(
@@ -16,27 +24,59 @@ async def get_gpu_stats(
     stdout_pipe: Any | None = None,
     stderr_devnull: Any | None = None,
 ) -> dict[str, Any]:
+    runner = create_subprocess_exec or asyncio.create_subprocess_exec
+    for smi in SMI_COMMANDS:
+        text = await _run_smi(
+            runner,
+            smi,
+            (
+                "--query-gpu=index,memory.used,memory.total,utilization.gpu,temperature.gpu",
+                "--format=csv,noheader,nounits",
+            ),
+            stdout_pipe=stdout_pipe,
+            stderr_devnull=stderr_devnull,
+        )
+        if text is None:
+            continue
+        rows = parse_gpu_stats_rows(text)
+        if rows:
+            return _select_gpu_stats(rows, gpu_whitelist)
+
+    return await asyncio.to_thread(_get_gpu_stats_torch, gpu_whitelist)
+
+
+def _select_gpu_stats(rows: list[dict[str, int]], gpu_whitelist: list[int] | None) -> dict[str, Any]:
+    selected = normalize_gpu_whitelist(gpu_whitelist)
+    if selected:
+        selected_set = set(selected)
+        rows = [row for row in rows if row["index"] in selected_set]
+    else:
+        rows = rows[:1]
+    return aggregate_gpu_stats_rows(rows)
+
+
+async def _run_smi(
+    runner: CreateSubprocessExec,
+    executable: str,
+    args: tuple[str, ...],
+    *,
+    stdout_pipe: Any | None,
+    stderr_devnull: Any | None,
+) -> str | None:
     try:
-        runner = create_subprocess_exec or asyncio.create_subprocess_exec
         proc = await runner(
-            "nvidia-smi",
-            "--query-gpu=index,memory.used,memory.total,utilization.gpu,temperature.gpu",
-            "--format=csv,noheader,nounits",
+            executable,
+            *args,
             stdout=stdout_pipe if stdout_pipe is not None else asyncio.subprocess.PIPE,
             stderr=stderr_devnull if stderr_devnull is not None else asyncio.subprocess.DEVNULL,
         )
         stdout, _ = await proc.communicate()
-        rows = parse_gpu_stats_rows(stdout.decode(errors="replace"))
-        selected = normalize_gpu_whitelist(gpu_whitelist)
-        if selected:
-            selected_set = set(selected)
-            rows = [row for row in rows if row["index"] in selected_set]
-        else:
-            rows = rows[:1]
-        return aggregate_gpu_stats_rows(rows)
     except Exception:
-        pass
-    return {}
+        return None
+    returncode = getattr(proc, "returncode", 0)
+    if returncode not in (0, None):
+        return None
+    return stdout.decode(errors="replace")
 
 
 def parse_gpu_stats_rows(text: str) -> list[dict[str, int]]:
@@ -80,25 +120,85 @@ async def list_available_gpus(
     stdout_pipe: Any | None = None,
     stderr_devnull: Any | None = None,
 ) -> list[dict[str, Any]]:
-    try:
-        runner = create_subprocess_exec or asyncio.create_subprocess_exec
-        proc = await runner(
-            "nvidia-smi",
-            "--query-gpu=index,name,memory.total",
-            "--format=csv,noheader,nounits",
-            stdout=stdout_pipe if stdout_pipe is not None else asyncio.subprocess.PIPE,
-            stderr=stderr_devnull if stderr_devnull is not None else asyncio.subprocess.DEVNULL,
+    runner = create_subprocess_exec or asyncio.create_subprocess_exec
+    for smi in SMI_COMMANDS:
+        text = await _run_smi(
+            runner,
+            smi,
+            ("--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"),
+            stdout_pipe=stdout_pipe,
+            stderr_devnull=stderr_devnull,
         )
-        stdout, _ = await proc.communicate()
+        if text is None:
+            continue
+        gpus: list[dict[str, Any]] = []
+        for line in text.splitlines():
+            item = parse_available_gpu_row(line)
+            if item is not None:
+                gpus.append(item)
+        if gpus:
+            return gpus
+
+    return await asyncio.to_thread(_list_available_gpus_torch)
+
+
+def _list_available_gpus_torch() -> list[dict[str, Any]]:
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return []
+        gpus: list[dict[str, Any]] = []
+        for index in range(torch.cuda.device_count()):
+            name = torch.cuda.get_device_name(index)
+            total_mb = int(torch.cuda.get_device_properties(index).total_memory // (1024 * 1024))
+            gpus.append(
+                {
+                    "index": index,
+                    "name": name,
+                    "label": f"GPU {index} · {name}",
+                    "memory_total_mb": total_mb,
+                    "memory_total_gb": round(total_mb / 1024, 1),
+                }
+            )
+        return gpus
     except Exception:
         return []
 
-    gpus: list[dict[str, Any]] = []
-    for line in stdout.decode(errors="replace").splitlines():
-        item = parse_available_gpu_row(line)
-        if item is not None:
-            gpus.append(item)
-    return gpus
+
+def _get_gpu_stats_torch(gpu_whitelist: list[int] | None = None) -> dict[str, Any]:
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return {}
+        count = torch.cuda.device_count()
+        selected = normalize_gpu_whitelist(gpu_whitelist) or [0]
+        selected = [index for index in selected if 0 <= index < count]
+        if not selected:
+            return {}
+        rows: list[dict[str, int]] = []
+        for index in selected:
+            free_bytes, total_bytes = torch.cuda.mem_get_info(index)
+            used_mb = int((total_bytes - free_bytes) // (1024 * 1024))
+            total_mb = int(total_bytes // (1024 * 1024))
+            utilization = 0
+            try:
+                utilization = int(torch.cuda.utilization(index))
+            except Exception:
+                pass
+            rows.append(
+                {
+                    "index": index,
+                    "memory_used_mb": used_mb,
+                    "memory_total_mb": total_mb,
+                    "gpu_util": utilization,
+                    "gpu_temp": 0,
+                }
+            )
+        return aggregate_gpu_stats_rows(rows)
+    except Exception:
+        return {}
 
 
 def parse_available_gpu_row(line: str) -> dict[str, Any] | None:
@@ -141,6 +241,9 @@ def apply_gpu_whitelist(env: dict[str, str], whitelist: list[int]) -> None:
     if whitelist:
         env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         env["CUDA_VISIBLE_DEVICES"] = ",".join(str(index) for index in whitelist)
+        # MetaX runtimes accept the CUDA-compatible variable above; mirror it
+        # for tooling that looks for the MACA-native spelling.
+        env["MACA_VISIBLE_DEVICES"] = env["CUDA_VISIBLE_DEVICES"]
 
 
 def int_or_none(value: Any) -> int | None:

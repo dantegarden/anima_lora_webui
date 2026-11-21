@@ -5,9 +5,10 @@ should hold VRAM. Before launching the next job the manager asks who's holding
 the GPU so it can distinguish "free, go" from "a known dead job leaked VRAM,
 reap it" from "an unknown proc is using the card, don't blind-kill it".
 
-pynvml first (no subprocess, exact), ``nvidia-smi`` fallback, then give up
-gracefully — the guard degrades to "assume free" rather than deadlocking the
-queue if neither is available (e.g. CPU-only CI).
+pynvml first (no subprocess, exact), ``nvidia-smi`` / ``mx-smi`` fallback, then
+the PyTorch accelerator runtime, then give up gracefully — the guard degrades to
+"assume free" rather than deadlocking the queue if neither is available (e.g.
+CPU-only CI).
 """
 
 from __future__ import annotations
@@ -48,7 +49,10 @@ def gpu_mem() -> Optional[tuple[int, int]]:
     mem = _gpu_mem_nvml()
     if mem is not None:
         return mem
-    return _gpu_mem_smi()
+    mem = _gpu_mem_smi()
+    if mem is not None:
+        return mem
+    return _gpu_mem_torch()
 
 
 def _gpu_mem_nvml() -> Optional[tuple[int, int]]:
@@ -75,33 +79,52 @@ def _gpu_mem_nvml() -> Optional[tuple[int, int]]:
 
 
 def _gpu_mem_smi() -> Optional[tuple[int, int]]:
-    smi = shutil.which("nvidia-smi")
-    if smi is None:
-        return None
+    for name in ("nvidia-smi", "mx-smi"):
+        smi = shutil.which(name)
+        if smi is None:
+            continue
+        try:
+            out = subprocess.run(
+                [
+                    smi,
+                    "--query-gpu=memory.used,memory.total",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+                **no_window_kwargs(),
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if out.returncode != 0:
+            continue
+        used = total = 0
+        for line in out.stdout.splitlines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                used += int(parts[0])
+                total += int(parts[1])
+        if total > 0:
+            return (used, total)
+    return None
+
+
+def _gpu_mem_torch() -> Optional[tuple[int, int]]:
     try:
-        out = subprocess.run(
-            [
-                smi,
-                "--query-gpu=memory.used,memory.total",
-                "--format=csv,noheader,nounits",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-            **no_window_kwargs(),
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        import torch
+
+        if not torch.cuda.is_available():
+            return None
+        used = total = 0
+        for index in range(torch.cuda.device_count()):
+            free_bytes, total_bytes = torch.cuda.mem_get_info(index)
+            used += int(total_bytes - free_bytes)
+            total += int(total_bytes)
+        return (used // (1024 * 1024), total // (1024 * 1024)) if total > 0 else None
+    except Exception:
         return None
-    if out.returncode != 0:
-        return None
-    used = total = 0
-    for line in out.stdout.splitlines():
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-            used += int(parts[0])
-            total += int(parts[1])
-    return (used, total) if total > 0 else None
 
 
 def _gpu_pids_nvml() -> Optional[set[int]]:
@@ -136,29 +159,31 @@ def _gpu_pids_nvml() -> Optional[set[int]]:
 
 
 def _gpu_pids_smi() -> Optional[set[int]]:
-    smi = shutil.which("nvidia-smi")
-    if smi is None:
-        return None
-    try:
-        out = subprocess.run(
-            [
-                smi,
-                "--query-compute-apps=pid",
-                "--format=csv,noheader,nounits",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-            **no_window_kwargs(),
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if out.returncode != 0:
-        return None
-    pids: set[int] = set()
-    for line in out.stdout.splitlines():
-        line = line.strip()
-        if line.isdigit():
-            pids.add(int(line))
-    return pids
+    for name in ("nvidia-smi", "mx-smi"):
+        smi = shutil.which(name)
+        if smi is None:
+            continue
+        try:
+            out = subprocess.run(
+                [
+                    smi,
+                    "--query-compute-apps=pid",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+                **no_window_kwargs(),
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if out.returncode != 0:
+            continue
+        pids: set[int] = set()
+        for line in out.stdout.splitlines():
+            line = line.strip()
+            if line.isdigit():
+                pids.add(int(line))
+        return pids
+    return None

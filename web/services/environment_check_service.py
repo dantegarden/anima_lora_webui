@@ -51,8 +51,13 @@ def run_environment_check() -> dict[str, Any]:
         "cuda_track": "unknown",
     }
     pv = info["python_version"].split(".")[:2]
-    if tuple(int(x) for x in pv) != (3, 13):
-        add("error", "python_version", f"需要 Python 3.13，当前 {info['python_version']}", hint="uv sync 后用项目 venv 启动 WebUI")
+    if tuple(int(x) for x in pv) not in {(3, 12), (3, 13)}:
+        add(
+            "error",
+            "python_version",
+            f"需要 Python 3.13（NVIDIA）或 3.12（沐曦/MACA），当前 {info['python_version']}",
+            hint="NVIDIA 用 uv sync；沐曦镜像使用镜像内 .venv",
+        )
     else:
         add("ok", "python_version", f"Python {info['python_version']}")
     if not venv_python_path():
@@ -71,11 +76,13 @@ def run_environment_check() -> dict[str, Any]:
         ("tool_uv", ["uv", "--version"], "uv"),
         ("tool_hf", ["hf", "--version"], "hf"),
         ("tool_nvidia_smi", ["nvidia-smi", "--version"], "nvidia-smi"),
+        ("tool_mx_smi", ["mx-smi", "--version"], "mx-smi"),
+        ("tool_ht_smi", ["ht-smi", "--version"], "ht-smi"),
     ):
         ok, detail = _run_cmd(cmd)
         if ok:
             add("ok", key, f"{label} 可用", group="platform_tools", detail=detail)
-        elif key in {"tool_hf", "tool_nvidia_smi"}:
+        elif key in {"tool_hf", "tool_nvidia_smi", "tool_mx_smi", "tool_ht_smi"}:
             add("warning", key, f"{label} 不可用", group="platform_tools", detail=detail)
         else:
             add("error", key, f"{label} 不可用", group="platform_tools", detail=detail)
