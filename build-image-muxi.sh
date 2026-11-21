@@ -8,4 +8,4 @@ export DOCKERFILE="${DOCKERFILE:-Dockerfile.muxi}"
 export IMAGE_NAME="${IMAGE_NAME:-hub.6scloud.com/d1s6t1r3jrms73f3ltpg/anima-lora-webui}"
 export IMAGE_TAG="${IMAGE_TAG:-muxi-20261121-v1}"
 
-exec ./build-image.sh "$@"
+exec bash ./build-image.sh "$@"
