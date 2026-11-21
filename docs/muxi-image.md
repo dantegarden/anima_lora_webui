@@ -30,7 +30,7 @@ hub.6scloud.com/d1s6t1r3jrms73f3ltpg/comfyui-metax-c500-torch2dot10:v20261117-da
 
 ```bash
 IMAGE_NAME=hub.6scloud.com/d1s6t1r3jrms73f3ltpg/anima-lora-webui \
-IMAGE_TAG=muxi-20261121-v1 \
+IMAGE_TAG=muxi-20261121-v2 \
 ./build-image-muxi.sh
 ```
 
@@ -43,7 +43,7 @@ IMAGE_TAG=muxi-20261121-v1 \
 docker run --rm -it --gpus all \
   -p 20102:20102 -p 4200:4200 -p 2222:22 \
   -e SSH_PASSWORD=bizyair \
-  hub.6scloud.com/d1s6t1r3jrms73f3ltpg/anima-lora-webui:muxi-20261121-v1
+  hub.6scloud.com/d1s6t1r3jrms73f3ltpg/anima-lora-webui:muxi-20261121-v2
 ```
 
 平台侧通常由容器运行时注入设备，`--gpus all` 只是本地验证写法；请以实际沐曦容器
@@ -54,15 +54,29 @@ CUDA toolkit。
 
 ```bash
 docker run --rm --entrypoint /workspace/anima_lora_webui/.venv/bin/python \
-  hub.6scloud.com/d1s6t1r3jrms73f3ltpg/anima-lora-webui:muxi-20261121-v1 \
+  hub.6scloud.com/d1s6t1r3jrms73f3ltpg/anima-lora-webui:muxi-20261121-v2 \
   -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 
 docker run --rm --entrypoint /workspace/anima_lora_webui/.venv/bin/python \
-  hub.6scloud.com/d1s6t1r3jrms73f3ltpg/anima-lora-webui:muxi-20261121-v1 \
+  hub.6scloud.com/d1s6t1r3jrms73f3ltpg/anima-lora-webui:muxi-20261121-v2 \
   -c "import library, networks, web; print('imports ok')"
 ```
 
 没有沐曦板卡时 `torch.cuda.is_available()` 应为 `False`，但 `import torch` 必须成功。
+
+## 构建记录
+
+`muxi-20261121-v2`（`sha256:0d86958cd22c683adde7ad521e1cc1edd22f63100ca67811fe9aeac3c57b8940`）
+在无沐曦卡的构建机上验证：
+
+- Python 3.12.11，`torch 2.10.0+mars3.8.2.2`，`torchvision 0.25.0+mars3.8.2.2`，`numpy 2.2.6`；
+- venv 内没有 CUDA 版 `torch` / `nvidia-*` 运行时包；
+- `library`、`networks`、`web` 可导入，`tasks.py web` 返回 HTTP 200；
+- `torch.cuda.is_available()` 为 `False` 仅因构建机没有沐曦卡。
+
+注意：基础镜像的 conda 环境里可能有旧版依赖会被 `--system-site-packages` 优先找到。
+例如 `peft 0.13.2` 会让 `diffusers 0.37.1` 导入失败，因此 `requirements-muxi.txt`
+显式固定 `peft==0.22.0`。新增依赖时若基础镜像里已有旧版本，也要显式写进 requirements。
 
 ## 已知限制
 
