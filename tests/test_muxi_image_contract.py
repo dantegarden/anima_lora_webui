@@ -34,7 +34,7 @@ def test_muxi_requirements_do_not_install_cuda_only_wheels() -> None:
 
     for excluded in ("torch", "torchvision", "torchaudio", "flash-attn", "bitsandbytes", "sam3"):
         assert excluded not in packages
-    for included in ("accelerate==", "transformers==", "diffusers==", "aiohttp==", "numpy=="):
+    for included in ("accelerate==", "transformers==", "diffusers==", "peft==", "aiohttp==", "numpy=="):
         assert included in lowered
 
 
