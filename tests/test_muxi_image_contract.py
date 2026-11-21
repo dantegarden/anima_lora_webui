@@ -20,7 +20,8 @@ def test_muxi_dockerfile_reuses_metax_runtime() -> None:
     assert "uv sync" not in dockerfile
     assert "uv python install 3.13" not in dockerfile
     assert "ENV PATH=/workspace/anima_lora_webui/.venv/bin:/root/.local/bin:${PATH}" in dockerfile
-    assert 'ENTRYPOINT ["/usr/local/bin/dumb-init", "--", "/usr/local/bin/entrypoint.sh"]' in dockerfile
+    assert 'ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/entrypoint.sh"]' in dockerfile
+    assert "dumb-init \\" in dockerfile
 
 
 def test_muxi_requirements_do_not_install_cuda_only_wheels() -> None:

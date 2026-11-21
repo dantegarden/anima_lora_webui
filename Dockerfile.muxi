@@ -47,6 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libgomp1 \
     openssl \
+    dumb-init \
  && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -60,9 +61,6 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh \
 
 RUN curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash \
  && ossutil --version
-
-RUN wget -O /usr/local/bin/dumb-init https://bizy-air.oss-cn-beijing.aliyuncs.com/dumb-init_1.2.5_x86_64 \
- && chmod +x /usr/local/bin/dumb-init
 
 WORKDIR /workspace/anima_lora_webui
 
@@ -93,4 +91,4 @@ EXPOSE 22 20102 4200
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD bash -lc "curl -fsS http://127.0.0.1:${WEBUI_PORT}/ >/dev/null || exit 1"
 
-ENTRYPOINT ["/usr/local/bin/dumb-init", "--", "/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/entrypoint.sh"]
