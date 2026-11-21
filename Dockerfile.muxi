@@ -77,7 +77,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
  && /opt/conda/bin/python -m venv --system-site-packages /workspace/anima_lora_webui/.venv \
  && .venv/bin/python -m pip install --upgrade pip \
  && .venv/bin/python /workspace/anima_lora_webui/docker/muxi_constraints.py > /tmp/muxi-constraints.txt \
- && /root/.local/bin/uv pip install --python /workspace/anima_lora_webui/.venv/bin/python \
+ && .venv/bin/python -m pip install --no-cache-dir \
       --index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple \
       --extra-index-url https://pypi.org/simple \
       --constraint /tmp/muxi-constraints.txt \
